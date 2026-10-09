@@ -1,0 +1,18 @@
+# Ambiente
+.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.local
