@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'blocked', 'done')),
     priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+    due_date TEXT DEFAULT NULL,
     created_by_membership_id INTEGER NOT NULL REFERENCES company_memberships(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -94,5 +95,12 @@ def init_db():
     # A tabela legada "empresas" (versão anterior, sem usuários) não é alterada nem removida.
     conn = get_connection()
     conn.executescript(SCHEMA)
+
+    # Migração: adiciona coluna due_date se a tabela tasks já existir sem ela
+    cursor = conn.execute("PRAGMA table_info(tasks)")
+    columns = [row["name"] for row in cursor.fetchall()]
+    if "due_date" not in columns:
+        conn.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT DEFAULT NULL")
+
     conn.commit()
     conn.close()

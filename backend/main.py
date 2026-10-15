@@ -224,6 +224,50 @@ def get_company(company_id: int, m=Depends(member_ctx), db=Depends(get_db)):
     return {**dict(c), "membership": {"id": m["id"], "role": m["role"], "name": m["name"]}}
 
 
+class CompanyPatch(BaseModel):
+    name: Optional[str] = None
+    cnpj: Optional[str] = None
+
+    _n = field_validator("name")(lambda cls, v: _clean_name(v, "O nome da empresa") if v is not None else v)
+    _c = field_validator("cnpj")(lambda cls, v: _clean_cnpj(v) if v is not None else v)
+
+
+@app.patch("/api/companies/{company_id}")
+def update_company(
+    company_id: int,
+    data: CompanyPatch,
+    m=Depends(master_ctx),
+    user=Depends(current_user),
+    db=Depends(get_db),
+):
+    updates = {}
+    if data.name is not None:
+        updates["name"] = data.name
+    if data.cnpj is not None:
+        updates["cnpj"] = data.cnpj
+    if updates:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        try:
+            db.execute(f"UPDATE companies SET {sets} WHERE id = ?", (*updates.values(), company_id))
+            db.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="Já existe uma empresa com este CPF/CNPJ.")
+    return user_payload(db, user)
+
+
+@app.delete("/api/companies/{company_id}")
+def delete_company(
+    company_id: int,
+    m=Depends(master_ctx),
+    user=Depends(current_user),
+    db=Depends(get_db),
+):
+    db.execute("DELETE FROM companies WHERE id = ?", (company_id,))
+    db.commit()
+    return user_payload(db, user)
+
+
+
 # ---------------------------------------------------------------------------
 # Membros
 # ---------------------------------------------------------------------------
@@ -506,6 +550,7 @@ class TaskIn(BaseModel):
     title: str
     description: str = ""
     priority: Priority = "medium"
+    due_date: Optional[str] = None
     project_id: Optional[int] = None
     assignee_ids: list[int] = []
 
@@ -517,6 +562,7 @@ class TaskPatch(BaseModel):
     description: Optional[str] = None
     priority: Optional[Priority] = None
     status: Optional[Status] = None
+    due_date: Optional[str] = None
     project_id: Optional[int] = None  # distinguimos "ausente" de null via model_fields_set
 
 
@@ -640,10 +686,11 @@ def create_task(company_id: int, data: TaskIn, m=Depends(member_ctx), db=Depends
         # Colaborador: sempre Tarefa Geral, auto-atribuída a si mesmo, sem atribuir a terceiros.
         project_id = None
         assignees = [m["id"]]
+    due_val = data.due_date.strip() if data.due_date and data.due_date.strip() else None
     cur = db.execute(
-        """INSERT INTO tasks (company_id, project_id, title, description, priority, created_by_membership_id)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (company_id, project_id, data.title, data.description.strip(), data.priority, m["id"]),
+        """INSERT INTO tasks (company_id, project_id, title, description, priority, due_date, created_by_membership_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (company_id, project_id, data.title, data.description.strip(), data.priority, due_val, m["id"]),
     )
     for mid in assignees:
         db.execute("INSERT INTO task_assignees (task_id, membership_id) VALUES (?, ?)", (cur.lastrowid, mid))
@@ -677,6 +724,8 @@ def update_task(
         updates["description"] = data.description.strip()
     if "priority" in fields and data.priority is not None:
         updates["priority"] = data.priority
+    if "due_date" in fields:
+        updates["due_date"] = data.due_date.strip() if data.due_date and data.due_date.strip() else None
     if "status" in fields and data.status is not None:
         updates["status"] = data.status  # sem trava de sub-tarefas em aberto
     if "project_id" in fields:
@@ -764,3 +813,23 @@ def update_subtask(
     touch_task(db, task_id)
     db.commit()
     return serialize_task(db, get_task_or_404(db, company_id, task_id))
+
+
+@app.delete("/api/companies/{company_id}/tasks/{task_id}")
+def delete_task(
+    company_id: int, task_id: int,
+    m=Depends(member_ctx), db=Depends(get_db),
+):
+    task = get_task_or_404(db, company_id, task_id)
+    ensure_can_see_task(db, m, task)
+    is_creator = task["created_by_membership_id"] == m["id"]
+    is_master = m["role"] == "master"
+    if not (is_creator or is_master):
+        raise HTTPException(status_code=403, detail="Apenas o criador da tarefa ou um Master pode excluí-la.")
+
+    db.execute("DELETE FROM task_assignees WHERE task_id = ?", (task_id,))
+    db.execute("DELETE FROM subtasks WHERE task_id = ?", (task_id,))
+    db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    db.commit()
+    return {"ok": True, "message": "Tarefa e histórico excluídos com sucesso."}
+

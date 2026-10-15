@@ -1,21 +1,66 @@
-# Ambiente
+# Ambiente e Segredos
 .env
+.env.*
 !.env.example
+backend/.secret_key
+*.pem
+*.key
+
+# Bancos de Dados e SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Documentos e PDFs
+*.pdf
+*:Zone.Identifier
+
+# Planilhas e Relatórios
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.ods
+*.csv
+
+# Documentos de Escritório
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.odt
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.db
 .venv/
 venv/
 env/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
 
-# Node
+# Node & Frontend
 node_modules/
 dist/
+dist-ssr/
 .vite/
 *.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Segredo de assinatura de tokens (gerado automaticamente)
-backend/.secret_key
+# Sistema Operacional e IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
