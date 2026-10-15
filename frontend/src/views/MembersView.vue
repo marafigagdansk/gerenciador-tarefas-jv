@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useCompanyStore } from '../stores/company'
 import { ROLE_LABELS } from '../api'
+import { Plus, X } from 'lucide-vue-next'
 
 const company = useCompanyStore()
 
@@ -15,7 +16,7 @@ const erro = ref('')
 const sucesso = ref('')
 const carregando = ref(false)
 
-const myMembershipId = computed(() => company.activeMembership.id)
+const myMembershipId = computed(() => company.activeMembership?.id ?? null)
 
 function abrir() {
   email.value = ''
@@ -86,7 +87,10 @@ async function alterar(m, patch) {
         <h1>Colaboradores</h1>
         <p class="subtitle">Gerencie quem tem acesso a esta empresa e com qual papel.</p>
       </div>
-      <button id="btn-add-membro" class="btn btn-primary" @click="abrir">+ Adicionar Membro</button>
+      <button id="btn-add-membro" class="btn btn-primary" @click="abrir">
+        <Plus :size="16" />
+        Adicionar Membro
+      </button>
     </div>
 
     <div v-if="erro && !aberto" class="alert-error" style="margin-bottom: 1rem">{{ erro }}</div>
@@ -126,7 +130,9 @@ async function alterar(m, patch) {
       <div class="modal-box">
         <div class="modal-header">
           <h3>Adicionar Membro à Empresa</h3>
-          <button class="btn-icon" @click="aberto = false" aria-label="Fechar">&times;</button>
+          <button class="btn-icon" @click="aberto = false" aria-label="Fechar">
+            <X :size="20" />
+          </button>
         </div>
         <form class="modal-body" @submit.prevent="lookup ? adicionar() : verificar()">
           <div v-if="erro" class="alert-error">{{ erro }}</div>

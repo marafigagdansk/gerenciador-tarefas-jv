@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useCompanyStore } from '../stores/company'
+import { X } from 'lucide-vue-next'
 
 const props = defineProps({ isOpen: Boolean })
 const emit = defineEmits(['close', 'created'])
@@ -49,7 +50,9 @@ async function salvar() {
     <div class="modal-box">
       <div class="modal-header">
         <h3>Novo Projeto</h3>
-        <button class="btn-icon" @click="emit('close')" aria-label="Fechar">&times;</button>
+        <button class="btn-icon" @click="emit('close')" aria-label="Fechar">
+          <X :size="20" />
+        </button>
       </div>
       <form @submit.prevent="salvar" class="modal-body">
         <div v-if="erro" class="alert-error">{{ erro }}</div>

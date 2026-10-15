@@ -1,16 +1,29 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { Plus } from 'lucide-vue-next'
 import CardEmpresa from '../components/CardEmpresa.vue'
 import ModalEmpresa from '../components/ModalEmpresa.vue'
+import ModalEditarEmpresa from '../components/ModalEditarEmpresa.vue'
+import ModalExcluirEmpresa from '../components/ModalExcluirEmpresa.vue'
 
 const auth = useAuthStore()
-const router = useRouter()
 const modalAberto = ref(false)
 
-function abrir(m) {
-  router.push({ name: 'tasks', params: { companyId: m.company_id } })
+const empresaParaEditar = ref(null)
+const modalEditarAberto = ref(false)
+
+const empresaParaExcluir = ref(null)
+const modalExcluirAberto = ref(false)
+
+function onEditar(membership) {
+  empresaParaEditar.value = membership
+  modalEditarAberto.value = true
+}
+
+function onExcluir(membership) {
+  empresaParaExcluir.value = membership
+  modalExcluirAberto.value = true
 }
 </script>
 
@@ -22,7 +35,8 @@ function abrir(m) {
         <p class="subtitle">Selecione uma empresa para abrir o workspace.</p>
       </div>
       <button v-if="auth.canCreateCompany" id="btn-nova-empresa" class="btn btn-primary" @click="modalAberto = true">
-        + Nova Empresa
+        <Plus :size="16" />
+        Nova Empresa
       </button>
     </div>
 
@@ -32,10 +46,28 @@ function abrir(m) {
     </div>
 
     <div v-else class="empresas-grid">
-      <CardEmpresa v-for="m in auth.memberships" :key="m.membership_id" :membership="m" @select="abrir" />
+      <CardEmpresa
+        v-for="m in auth.memberships"
+        :key="m.membership_id"
+        :membership="m"
+        @editar="onEditar"
+        @excluir="onExcluir"
+      />
     </div>
 
     <ModalEmpresa :is-open="modalAberto" @close="modalAberto = false" />
+    <ModalEditarEmpresa
+      :is-open="modalEditarAberto"
+      :empresa="empresaParaEditar"
+      @close="modalEditarAberto = false"
+      @saved="modalEditarAberto = false"
+    />
+    <ModalExcluirEmpresa
+      :is-open="modalExcluirAberto"
+      :empresa="empresaParaExcluir"
+      @close="modalExcluirAberto = false"
+      @deleted="modalExcluirAberto = false"
+    />
   </main>
 </template>
 

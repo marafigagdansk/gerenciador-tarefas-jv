@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useTaskStore } from '../stores/task'
 import { useCompanyStore } from '../stores/company'
 import { PRIORITY_LABELS } from '../api'
+import { X, Plus } from 'lucide-vue-next'
 
 const props = defineProps({ isOpen: Boolean, projectId: { type: Number, default: null } })
 const emit = defineEmits(['close'])
@@ -13,6 +14,7 @@ const company = useCompanyStore()
 const title = ref('')
 const description = ref('')
 const priority = ref('medium')
+const dueDate = ref('')
 const targetProject = ref(null)
 const assignees = ref([])
 const erro = ref('')
@@ -27,6 +29,7 @@ watch(() => props.isOpen, (open) => {
   title.value = ''
   description.value = ''
   priority.value = 'medium'
+  dueDate.value = ''
   targetProject.value = props.projectId
   assignees.value = []
   erro.value = ''
@@ -36,7 +39,12 @@ async function salvar() {
   erro.value = ''
   carregando.value = true
   try {
-    const payload = { title: title.value, description: description.value, priority: priority.value }
+    const payload = {
+      title: title.value,
+      description: description.value,
+      priority: priority.value,
+      due_date: dueDate.value || null,
+    }
     if (isMaster.value) {
       payload.project_id = targetProject.value
       payload.assignee_ids = assignees.value
@@ -56,7 +64,9 @@ async function salvar() {
     <div class="modal-box">
       <div class="modal-header">
         <h3>Nova Tarefa</h3>
-        <button class="btn-icon" @click="emit('close')" aria-label="Fechar">&times;</button>
+        <button class="btn-icon" @click="emit('close')" aria-label="Fechar">
+          <X :size="20" />
+        </button>
       </div>
       <form @submit.prevent="salvar" class="modal-body">
         <div v-if="erro" class="alert-error">{{ erro }}</div>
@@ -74,6 +84,21 @@ async function salvar() {
           <select id="tarefa-prioridade" v-model="priority">
             <option v-for="(label, key) in PRIORITY_LABELS" :key="key" :value="key">{{ label }}</option>
           </select>
+        </div>
+        <div class="form-group">
+          <div class="label-with-action">
+            <label for="tarefa-data-conclusao">Data de Conclusão (opcional)</label>
+            <button
+              v-if="dueDate"
+              type="button"
+              class="btn-text-action"
+              @click="dueDate = ''"
+            >
+              Limpar (indefinida)
+            </button>
+          </div>
+          <input id="tarefa-data-conclusao" v-model="dueDate" type="date" />
+          <span class="hint">Caso não informada, a tarefa ficará com data indefinida.</span>
         </div>
 
         <template v-if="isMaster">
@@ -99,6 +124,7 @@ async function salvar() {
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" @click="emit('close')" :disabled="carregando">Cancelar</button>
           <button id="btn-salvar-tarefa" type="submit" class="btn btn-primary" :disabled="carregando">
+            <Plus :size="16" v-if="!carregando" />
             {{ carregando ? 'Criando...' : 'Criar tarefa' }}
           </button>
         </div>

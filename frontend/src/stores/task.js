@@ -69,8 +69,17 @@ export const useTaskStore = defineStore('task', () => {
     return replace(t, scopeProjectId)
   }
 
+  async function deleteTask(id) {
+    await api(`${base()}/tasks/${id}`, { method: 'DELETE' })
+    const idx = tasks.value.findIndex((t) => t.id === id)
+    if (idx !== -1) {
+      tasks.value.splice(idx, 1)
+    }
+  }
+
   return {
     tasks, loading, fetchTasks, createTask, updateTask, claimTask,
-    setAssignees, addSubtask, toggleSubtask,
+    setAssignees, addSubtask, toggleSubtask, deleteTask,
   }
 })
+

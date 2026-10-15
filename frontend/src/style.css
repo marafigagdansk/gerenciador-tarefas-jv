@@ -143,6 +143,7 @@ body {
 input[type='text'],
 input[type='email'],
 input[type='password'],
+input[type='date'],
 textarea,
 select {
   background: var(--bg-input);
@@ -154,6 +155,31 @@ select {
   font-size: 0.95rem;
   outline: none;
   width: 100%;
+}
+
+input[type='date'] {
+  color-scheme: dark;
+}
+
+.label-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-text-action {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-text-action:hover {
+  text-decoration: underline;
+  color: #a5b4fc;
 }
 
 textarea {
@@ -272,16 +298,20 @@ textarea:disabled {
   gap: 1.1rem;
 }
 
-.modal-footer {
+.modal-footer,
+.modal-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 0.75rem;
-  margin-top: 0.4rem;
+  margin-top: 0.8rem;
 }
 
 /* ---------- Badges (estado imediato e legível) ---------- */
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   font-size: 0.74rem;
@@ -289,6 +319,11 @@ textarea:disabled {
   letter-spacing: 0.02em;
   border: 1px solid transparent;
   white-space: nowrap;
+}
+
+.badge svg,
+.btn svg {
+  flex-shrink: 0;
 }
 
 .badge-master { background: rgba(245, 158, 11, 0.18); color: #fcd34d; border-color: rgba(245, 158, 11, 0.5); }
@@ -304,6 +339,8 @@ textarea:disabled {
 .badge-high { background: rgba(239, 68, 68, 0.16); color: #fca5a5; border-color: rgba(239, 68, 68, 0.45); }
 
 .badge-muted { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); border-color: var(--border-color); }
+.badge-due { background: rgba(99, 102, 241, 0.15); color: #c7d2fe; border-color: rgba(99, 102, 241, 0.4); }
+.badge-overdue { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border-color: rgba(239, 68, 68, 0.55); font-weight: 700; }
 
 /* ---------- Layout comum ---------- */
 .page-header {
@@ -376,4 +413,13 @@ textarea:disabled {
   color: var(--text-muted);
   padding-top: 0.4rem;
   border-top: 1px solid var(--border-color);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
 }

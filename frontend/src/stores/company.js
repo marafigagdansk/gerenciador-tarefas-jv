@@ -12,18 +12,31 @@ export const useCompanyStore = defineStore('company', () => {
   const isMasterInCurrentCompany = computed(() => activeMembership.value?.role === 'master')
 
   async function load(id) {
-    const data = await api(`/companies/${id}`)
+    const numId = Number(id)
+    const data = await api(`/companies/${numId}`)
     company.value = { id: data.id, name: data.name, cnpj: data.cnpj }
     activeMembership.value = data.membership
-    await Promise.all([fetchMembers(), fetchProjects()])
+    try {
+      await Promise.all([fetchMembers(data.id), fetchProjects(data.id)])
+    } catch (e) {
+      console.warn('Aviso: falha ao carregar membros ou projetos secundários:', e)
+    }
   }
 
-  async function fetchMembers() {
-    members.value = await api(`/companies/${companyId.value}/members`)
+  async function fetchMembers(targetId = companyId.value) {
+    const cid = targetId || company.value?.id
+    if (!cid) return []
+    const res = await api(`/companies/${cid}/members`)
+    members.value = res
+    return res
   }
 
-  async function fetchProjects() {
-    projects.value = await api(`/companies/${companyId.value}/projects`)
+  async function fetchProjects(targetId = companyId.value) {
+    const cid = targetId || company.value?.id
+    if (!cid) return []
+    const res = await api(`/companies/${cid}/projects`)
+    projects.value = res
+    return res
   }
 
   async function lookupMember(email) {

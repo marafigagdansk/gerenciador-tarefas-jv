@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { maskDoc } from '../api'
+import { X } from 'lucide-vue-next'
 
 defineProps({ isOpen: Boolean })
 const emit = defineEmits(['close'])
@@ -42,7 +43,9 @@ function fechar() {
     <div class="modal-box">
       <div class="modal-header">
         <h3>Nova Empresa</h3>
-        <button class="btn-icon" @click="fechar" aria-label="Fechar">&times;</button>
+        <button class="btn-icon" @click="fechar" aria-label="Fechar">
+          <X :size="20" />
+        </button>
       </div>
       <form @submit.prevent="salvar" class="modal-body">
         <div v-if="erro" class="alert-error">{{ erro }}</div>

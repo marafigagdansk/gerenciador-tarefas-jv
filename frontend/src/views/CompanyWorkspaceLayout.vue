@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useCompanyStore } from '../stores/company'
 import { ROLE_LABELS } from '../api'
+import { ListTodo, Folder, Users, ArrowLeft, Plus } from 'lucide-vue-next'
 import ProjectFormModal from '../components/ProjectFormModal.vue'
 
 const company = useCompanyStore()
@@ -18,19 +19,24 @@ function projetoCriado(p) {
   <div v-if="company.company" class="workspace">
     <aside class="sidebar">
       <div class="side-company">
-        <p class="side-label">Empresa</p>
-        <h2 :title="company.company.name">{{ company.company.name }}</h2>
-        <span class="badge" :class="`badge-${company.activeMembership.role}`">
-          {{ ROLE_LABELS[company.activeMembership.role] }}
-        </span>
+        <div class="side-company-header">
+          <h2 :title="company.company.name">{{ company.company.name }}</h2>
+          <span v-if="company.activeMembership" class="badge" :class="`badge-${company.activeMembership.role}`">
+            {{ ROLE_LABELS[company.activeMembership.role] }}
+          </span>
+        </div>
         <RouterLink :to="{ name: 'companies' }" id="link-trocar-empresa" class="switch-link">
-          &larr; Trocar de empresa
+          <ArrowLeft :size="14" />
+          Trocar de empresa
         </RouterLink>
       </div>
 
       <nav class="side-nav">
         <RouterLink :to="{ name: 'tasks', params: { companyId: company.companyId } }" class="nav-link">
-          Tarefas Gerais
+          <span class="nav-label">
+            <ListTodo :size="16" />
+            Tarefas Gerais
+          </span>
         </RouterLink>
 
         <div class="nav-section">
@@ -41,7 +47,10 @@ function projetoCriado(p) {
             :to="{ name: 'project', params: { companyId: company.companyId, projectId: p.id } }"
             class="nav-link"
           >
-            {{ p.name }}
+            <span class="nav-label">
+              <Folder :size="15" />
+              {{ p.name }}
+            </span>
             <span v-if="p.status === 'archived'" class="badge badge-muted">Arquivado</span>
           </RouterLink>
           <p v-if="company.projects.length === 0" class="hint">
@@ -53,14 +62,18 @@ function projetoCriado(p) {
             class="btn btn-secondary btn-sm new-project"
             @click="modalProjeto = true"
           >
-            + Novo Projeto
+            <Plus :size="14" />
+            Novo Projeto
           </button>
         </div>
 
         <div v-if="company.isMasterInCurrentCompany" class="nav-section">
           <p class="side-label">Gestão</p>
           <RouterLink :to="{ name: 'members', params: { companyId: company.companyId } }" class="nav-link">
-            Colaboradores
+            <span class="nav-label">
+              <Users :size="16" />
+              Colaboradores
+            </span>
           </RouterLink>
         </div>
       </nav>
@@ -71,6 +84,9 @@ function projetoCriado(p) {
     </main>
 
     <ProjectFormModal :is-open="modalProjeto" @close="modalProjeto = false" @created="projetoCriado" />
+  </div>
+  <div v-else class="loading-state">
+    <p>Carregando workspace da empresa...</p>
   </div>
 </template>
 
@@ -101,14 +117,23 @@ function projetoCriado(p) {
   margin-bottom: 0.4rem;
 }
 
-.side-company h2 {
+.side-company-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.side-company-header h2 {
   font-size: 1.15rem;
-  margin-bottom: 0.5rem;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
 .switch-link {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-top: 0.8rem;
   font-size: 0.85rem;
   color: #a5b4fc;
@@ -144,6 +169,13 @@ function projetoCriado(p) {
   font-size: 0.92rem;
   font-weight: 500;
   overflow-wrap: anywhere;
+}
+
+.nav-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
 .nav-link:hover {

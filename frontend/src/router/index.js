@@ -17,12 +17,12 @@ const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
   { path: '/companies', name: 'companies', component: CompanyLobbyView },
   {
-    path: '/companies/:companyId(\\d+)',
+    path: '/companies/:companyId',
     component: CompanyWorkspaceLayout,
     children: [
       { path: '', redirect: (to) => `/companies/${to.params.companyId}/tasks` },
       { path: 'tasks', name: 'tasks', component: TasksView },
-      { path: 'projects/:projectId(\\d+)', name: 'project', component: ProjectView },
+      { path: 'projects/:projectId', name: 'project', component: ProjectView },
       { path: 'members', name: 'members', component: MembersView, meta: { masterOnly: true } },
     ],
   },
@@ -63,10 +63,12 @@ router.beforeEach(async (to) => {
   const companyId = to.params.companyId
   const company = useCompanyStore()
   if (companyId) {
-    if (company.companyId !== Number(companyId)) {
+    const numId = Number(companyId)
+    if (company.companyId !== numId) {
       try {
-        await company.load(companyId)
-      } catch {
+        await company.load(numId)
+      } catch (err) {
+        console.error('Erro ao carregar empresa na navegação:', err)
         company.reset()
         return { name: 'companies' }
       }

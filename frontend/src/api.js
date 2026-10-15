@@ -67,3 +67,13 @@ export const STATUS_LABELS = {
 }
 export const PRIORITY_LABELS = { low: 'Baixa', medium: 'Média', high: 'Alta' }
 export const ROLE_LABELS = { master: 'Master', collaborator: 'Colaborador' }
+
+export function formatDate(isoStr) {
+  if (!isoStr) return ''
+  const clean = isoStr.split('T')[0]
+  const parts = clean.split('-')
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`
+  }
+  return isoStr
+}

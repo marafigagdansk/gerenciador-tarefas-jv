@@ -38,6 +38,14 @@ export const useAuthStore = defineStore('auth', () => {
     applyPayload(await api('/companies', { method: 'POST', body: payload }))
   }
 
+  async function updateCompany(companyId, payload) {
+    applyPayload(await api(`/companies/${companyId}`, { method: 'PATCH', body: payload }))
+  }
+
+  async function deleteCompany(companyId) {
+    applyPayload(await api(`/companies/${companyId}`, { method: 'DELETE' }))
+  }
+
   function logout() {
     token.value = null
     user.value = null
@@ -48,6 +56,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token, user, memberships, canCreateCompany, isAuthenticated,
-    setup, login, fetchMe, createCompany, logout,
+    setup, login, fetchMe, createCompany, updateCompany, deleteCompany, logout,
   }
 })
