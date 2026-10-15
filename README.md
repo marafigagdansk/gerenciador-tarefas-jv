@@ -39,3 +39,17 @@ npm install
 npm run dev
 ```
 *O Vite lerá automaticamente a `FRONTEND_PORT` e direcionará o proxy para a porta do backend configurada no `.env`.*
+
+---
+
+## 🏢 Arquitetura (SaaS Multi-Empresa)
+
+Implementa `Especificacao_Arquitetura_SaaS_Tarefas_Vue.pdf`:
+
+- **Fluxo:** `/setup` (banco vazio: 1º usuário + 1ª empresa) → `/login` → `/companies` (lobby) → `/companies/:id/...` (workspace).
+- **Papéis por empresa:** `master` / `collaborator` ficam em `company_memberships`, nunca no usuário.
+- **Tarefas Gerais** (sem projeto) são públicas na empresa; **tarefas de projeto** só para quem tem acesso (`project_visibilities`).
+- **Pegar Tarefa** com múltiplos responsáveis; **sub-tarefas** exigem estar atribuído e não travam a conclusão.
+- **Backend:** autenticação por token assinado (HMAC) e senhas com PBKDF2, sem dependências extras. O segredo pode vir de `SECRET_KEY` no `.env`; senão é gerado em `backend/.secret_key`.
+- **Frontend:** Vue Router + Pinia (`auth`, `company`, `task`).
+- A tabela antiga `empresas` não é usada nem apagada.
