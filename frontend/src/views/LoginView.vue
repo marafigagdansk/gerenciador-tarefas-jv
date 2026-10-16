@@ -16,7 +16,11 @@ async function entrar() {
   carregando.value = true
   try {
     await auth.login(email.value, password.value)
-    router.push({ name: 'companies' })
+    if (auth.user?.must_change_password) {
+      router.push({ name: 'primeiro-acesso' })
+    } else {
+      router.push({ name: 'companies' })
+    }
   } catch (err) {
     erro.value = err.message
   } finally {

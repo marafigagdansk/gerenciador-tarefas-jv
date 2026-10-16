@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useCompanyStore } from '../stores/company'
 import { ROLE_LABELS } from '../api'
@@ -9,6 +9,18 @@ import ProjectFormModal from '../components/ProjectFormModal.vue'
 const company = useCompanyStore()
 const router = useRouter()
 const modalProjeto = ref(false)
+
+onMounted(async () => {
+  if (company.companyId) {
+    await company.fetchProjects()
+  }
+})
+
+watch(() => company.companyId, async (newId) => {
+  if (newId) {
+    await company.fetchProjects(newId)
+  }
+})
 
 function projetoCriado(p) {
   router.push({ name: 'project', params: { companyId: company.companyId, projectId: p.id } })
@@ -94,13 +106,14 @@ function projetoCriado(p) {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 270px 1fr;
-  max-width: 1280px;
+  grid-template-columns: 260px 1fr;
   width: 100%;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 .sidebar {
+  background: #FAF9F8;
   border-right: 1px solid var(--border-color);
   padding: 1.5rem 1rem;
   display: flex;
@@ -136,12 +149,14 @@ function projetoCriado(p) {
   gap: 0.4rem;
   margin-top: 0.8rem;
   font-size: 0.85rem;
-  color: #a5b4fc;
+  font-weight: 600;
+  color: var(--primary);
   text-decoration: none;
 }
 
 .switch-link:hover {
   text-decoration: underline;
+  color: var(--primary-hover);
 }
 
 .side-nav {
@@ -168,7 +183,9 @@ function projetoCriado(p) {
   text-decoration: none;
   font-size: 0.92rem;
   font-weight: 500;
+  border: 1px solid transparent;
   overflow-wrap: anywhere;
+  transition: all 0.15s ease;
 }
 
 .nav-label {
@@ -179,12 +196,13 @@ function projetoCriado(p) {
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: #EBEAE8;
 }
 
 .nav-link.router-link-active {
-  background: rgba(99, 102, 241, 0.22);
-  color: #fff;
+  background: #F0FDFA;
+  color: #0F766E;
+  border-color: #CCFBF1;
   font-weight: 700;
 }
 

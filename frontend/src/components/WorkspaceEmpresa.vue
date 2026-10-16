@@ -94,7 +94,7 @@ const emit = defineEmits(['back'])
   text-align: center;
   padding: 3rem 2rem;
   background: var(--bg-card);
-  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border: 1px dashed var(--border-color);
   border-radius: var(--radius-lg);
   max-width: 500px;
   width: 100%;

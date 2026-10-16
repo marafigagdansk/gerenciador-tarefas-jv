@@ -22,7 +22,11 @@ export const useTaskStore = defineStore('task', () => {
   // Substitui a tarefa na lista com o retorno do servidor; remove se saiu do escopo atual.
   function replace(task, scopeProjectId) {
     const idx = tasks.value.findIndex((t) => t.id === task.id)
-    const inScope = (task.project_id ?? null) === (scopeProjectId ?? null)
+    // No mural geral (scopeProjectId nulo), todas as tarefas (avulsas e de projetos com acesso) permanecem no escopo.
+    // No mural de um projeto específico, apenas tarefas daquele projeto permanecem no escopo.
+    const inScope = (scopeProjectId === null || scopeProjectId === undefined)
+      ? true
+      : task.project_id === scopeProjectId
     if (idx === -1) {
       if (inScope) tasks.value.unshift(task)
     } else if (inScope) {
@@ -45,6 +49,11 @@ export const useTaskStore = defineStore('task', () => {
 
   async function claimTask(id, scopeProjectId = null) {
     const t = await api(`${base()}/tasks/${id}/claim`, { method: 'POST' })
+    return replace(t, scopeProjectId)
+  }
+
+  async function unclaimTask(id, scopeProjectId = null) {
+    const t = await api(`${base()}/tasks/${id}/claim`, { method: 'DELETE' })
     return replace(t, scopeProjectId)
   }
 
@@ -76,10 +85,29 @@ export const useTaskStore = defineStore('task', () => {
       tasks.value.splice(idx, 1)
     }
   }
+  // Kanban: grava a ordem final de uma coluna; tarefas de outra coluna mudam de status.
+  async function reorderTasks(status, taskIds, projectId = null) {
+    taskIds.forEach((id, i) => {
+      const t = tasks.value.find((x) => x.id === id)
+      if (t) {
+        t.status = status
+        t.position = i + 1
+      }
+    })
+    try {
+      tasks.value = await api(`${base()}/tasks/order`, {
+        method: 'PUT',
+        body: { status, task_ids: taskIds, project_id: projectId },
+      })
+    } catch (err) {
+      await fetchTasks(projectId).catch(() => {})
+      throw err
+    }
+  }
 
   return {
-    tasks, loading, fetchTasks, createTask, updateTask, claimTask,
-    setAssignees, addSubtask, toggleSubtask, deleteTask,
+    tasks, loading, fetchTasks, createTask, updateTask, claimTask, unclaimTask,
+    setAssignees, addSubtask, toggleSubtask, deleteTask, reorderTasks,
   }
 })
 

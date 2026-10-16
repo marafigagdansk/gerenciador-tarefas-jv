@@ -108,14 +108,15 @@ function onExcluir() {
   width: 100%;
   user-select: none;
   -webkit-user-select: none;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .empresa-card:hover {
-  border-color: var(--border-color-hover);
-  background: var(--bg-card-hover);
+  border-color: #D6D3D1;
+  background: var(--bg-card);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
 }
 
 .empresa-card:active {
@@ -132,6 +133,7 @@ function onExcluir() {
 h3 {
   font-size: 1.1rem;
   font-weight: 700;
+  color: var(--text-main);
   overflow-wrap: anywhere;
 }
 
@@ -152,7 +154,7 @@ h3 {
   gap: 0.35rem;
   font-size: 0.88rem;
   font-weight: 600;
-  color: #a5b4fc;
+  color: var(--primary);
 }
 
 .top-actions {
@@ -185,7 +187,7 @@ h3 {
 .btn-menu:hover,
 .btn-menu.active {
   color: var(--text-main);
-  background: rgba(255, 255, 255, 0.1);
+  background: #F5F5F4;
 }
 
 .dropdown-menu {
@@ -193,10 +195,10 @@ h3 {
   top: 100%;
   right: 0;
   margin-top: 0.35rem;
-  background: #1e293b;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
   min-width: 155px;
   z-index: 30;
   padding: 0.35rem;
@@ -223,15 +225,15 @@ h3 {
 }
 
 .menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #F5F5F4;
 }
 
 .menu-item-danger {
-  color: #f87171;
+  color: #B91C1C;
 }
 
 .menu-item-danger:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
+  background: #FEF2F2;
+  color: #991B1B;
 }
 </style>

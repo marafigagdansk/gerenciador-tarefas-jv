@@ -122,9 +122,10 @@ function fechar() {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  border-radius: var(--radius-sm);
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
   flex-shrink: 0;
 }
 
@@ -136,19 +137,19 @@ function fechar() {
 }
 
 .empresa-highlight {
-  color: #fff;
-  font-weight: 600;
+  color: var(--text-main);
+  font-weight: 700;
   word-break: break-word;
 }
 
 .danger-warning-box {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
   border-radius: var(--radius-sm);
   padding: 0.9rem 1rem;
   font-size: 0.85rem;
   line-height: 1.45;
-  color: #fca5a5;
+  color: #B91C1C;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -158,7 +159,7 @@ function fechar() {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #f87171;
+  color: #991B1B;
 }
 
 .danger-list {
@@ -167,6 +168,6 @@ function fechar() {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  color: #fecaca;
+  color: #B91C1C;
 }
 </style>

@@ -1,3 +1,4 @@
+import datetime
 import re
 import sqlite3
 from typing import Literal, Optional
@@ -58,6 +59,20 @@ def _clean_cnpj(v: str) -> str:
     return digits
 
 
+def _clean_date(v: Optional[str]) -> Optional[str]:
+    """Aceita data ISO (AAAA-MM-DD); vazio vira None."""
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        return None
+    try:
+        datetime.date.fromisoformat(v)
+    except ValueError:
+        raise ValueError("Data inválida. Use o formato AAAA-MM-DD.")
+    return v
+
+
 # ---------------------------------------------------------------------------
 # Dependências
 # ---------------------------------------------------------------------------
@@ -76,7 +91,7 @@ def current_user(authorization: Optional[str] = Header(None), db=Depends(get_db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="Sessão inválida ou expirada.")
     user = db.execute(
-        "SELECT id, name, email FROM users WHERE id = ?", (user_id,)
+        "SELECT id, name, email, is_master, must_change_password FROM users WHERE id = ?", (user_id,)
     ).fetchone()
     if not user:
         raise HTTPException(status_code=401, detail="Usuário não encontrado.")
@@ -125,6 +140,12 @@ class LoginIn(BaseModel):
 
 
 def user_payload(db, user: dict):
+    user_row = db.execute(
+        "SELECT id, name, email, is_master, must_change_password FROM users WHERE id = ?", (user["id"],)
+    ).fetchone()
+    is_master_user = bool(user_row["is_master"]) if user_row and "is_master" in user_row.keys() else False
+    must_change = bool(user_row["must_change_password"]) if user_row and "must_change_password" in user_row.keys() else False
+
     rows = db.execute(
         """SELECT m.id AS membership_id, m.role, c.id AS company_id, c.name AS company_name, c.cnpj
            FROM company_memberships m JOIN companies c ON c.id = m.company_id
@@ -132,10 +153,24 @@ def user_payload(db, user: dict):
         (user["id"],),
     ).fetchall()
     memberships = [dict(r) for r in rows]
+    can_create = is_master_user or any(m["role"] == "master" for m in memberships)
+
+    if any(m["role"] == "master" for m in memberships) and not is_master_user:
+        db.execute("UPDATE users SET is_master = 1 WHERE id = ?", (user["id"],))
+        db.commit()
+        is_master_user = True
+        can_create = True
+
     return {
-        "user": user,
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "is_master": can_create,
+            "must_change_password": must_change,
+        },
         "memberships": memberships,
-        "can_create_company": any(m["role"] == "master" for m in memberships),
+        "can_create_company": can_create,
     }
 
 
@@ -150,7 +185,7 @@ def setup(data: SetupIn, db=Depends(get_db)):
     if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0:
         raise HTTPException(status_code=403, detail="O sistema já foi configurado.")
     cur = db.execute(
-        "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+        "INSERT INTO users (name, email, password_hash, is_master) VALUES (?, ?, ?, 1)",
         (data.name, data.email, hash_password(data.password)),
     )
     user_id = cur.lastrowid
@@ -163,24 +198,49 @@ def setup(data: SetupIn, db=Depends(get_db)):
         (cur.lastrowid, user_id),
     )
     db.commit()
-    user = {"id": user_id, "name": data.name, "email": data.email}
+    user = {"id": user_id, "name": data.name, "email": data.email, "is_master": 1}
     return {"token": create_token(user_id), **user_payload(db, user)}
 
 
 @app.post("/api/auth/login")
 def login(data: LoginIn, db=Depends(get_db)):
     row = db.execute(
-        "SELECT id, name, email, password_hash FROM users WHERE email = ?",
+        "SELECT id, name, email, is_master, password_hash FROM users WHERE email = ?",
         (data.email.strip().lower(),),
     ).fetchone()
     if not row or not verify_password(data.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
-    user = {"id": row["id"], "name": row["name"], "email": row["email"]}
+    user = {"id": row["id"], "name": row["name"], "email": row["email"], "is_master": row["is_master"]}
     return {"token": create_token(row["id"]), **user_payload(db, user)}
 
 
 @app.get("/api/auth/me")
 def me(user=Depends(current_user), db=Depends(get_db)):
+    return user_payload(db, user)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+    _p = field_validator("new_password")(lambda cls, v: _clean_password(v))
+
+
+@app.post("/api/auth/change-password")
+def change_password(data: ChangePasswordIn, user=Depends(current_user), db=Depends(get_db)):
+    user_row = db.execute(
+        "SELECT id, name, email, is_master, password_hash FROM users WHERE id = ?",
+        (user["id"],),
+    ).fetchone()
+    if not user_row or not verify_password(data.current_password, user_row["password_hash"]):
+        raise HTTPException(status_code=400, detail="Senha atual incorreta.")
+    if data.current_password == data.new_password:
+        raise HTTPException(status_code=400, detail="A nova senha deve ser diferente da senha provisória.")
+    db.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+        (hash_password(data.new_password), user["id"]),
+    )
+    db.commit()
     return user_payload(db, user)
 
 
@@ -197,11 +257,15 @@ class CompanyIn(BaseModel):
 
 @app.post("/api/companies", status_code=201)
 def create_company(data: CompanyIn, user=Depends(current_user), db=Depends(get_db)):
-    is_master = db.execute(
+    user_row = db.execute(
+        "SELECT is_master FROM users WHERE id = ?", (user["id"],)
+    ).fetchone()
+    is_user_master = bool(user_row and user_row["is_master"])
+    is_member_master = db.execute(
         "SELECT 1 FROM company_memberships WHERE user_id = ? AND role = 'master' AND is_active = 1 LIMIT 1",
         (user["id"],),
     ).fetchone()
-    if not is_master:
+    if not (is_user_master or is_member_master):
         raise HTTPException(status_code=403, detail="Apenas Masters podem criar empresas.")
     try:
         cur = db.execute(
@@ -214,6 +278,7 @@ def create_company(data: CompanyIn, user=Depends(current_user), db=Depends(get_d
         "INSERT INTO company_memberships (company_id, user_id, role) VALUES (?, ?, 'master')",
         (cur.lastrowid, user["id"]),
     )
+    db.execute("UPDATE users SET is_master = 1 WHERE id = ?", (user["id"],))
     db.commit()
     return user_payload(db, user)
 
@@ -342,6 +407,8 @@ def add_member(company_id: int, data: MemberIn, m=Depends(master_ctx), db=Depend
                 "UPDATE company_memberships SET is_active = 1, role = ? WHERE id = ?",
                 (data.role, existing["id"]),
             )
+            if data.role == "master":
+                db.execute("UPDATE users SET is_master = 1 WHERE id = ?", (user_id,))
             db.commit()
             return {"user_created": False, "reactivated": True}
     else:
@@ -352,8 +419,8 @@ def add_member(company_id: int, data: MemberIn, m=Depends(master_ctx), db=Depend
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         cur = db.execute(
-            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
-            (name, data.email, hash_password(password)),
+            "INSERT INTO users (name, email, password_hash, is_master, must_change_password) VALUES (?, ?, ?, ?, 1)",
+            (name, data.email, hash_password(password), 1 if data.role == "master" else 0),
         )
         user_id = cur.lastrowid
         user_created = True
@@ -361,6 +428,8 @@ def add_member(company_id: int, data: MemberIn, m=Depends(master_ctx), db=Depend
         "INSERT INTO company_memberships (company_id, user_id, role) VALUES (?, ?, ?)",
         (company_id, user_id, data.role),
     )
+    if data.role == "master":
+        db.execute("UPDATE users SET is_master = 1 WHERE id = ?", (user_id,))
     db.commit()
     return {"user_created": user_created, "reactivated": False}
 
@@ -393,6 +462,11 @@ def update_member(
         "UPDATE company_memberships SET role = ?, is_active = ? WHERE id = ?",
         (new_role, new_active, membership_id),
     )
+    if new_role == "master" and new_active:
+        db.execute(
+            "UPDATE users SET is_master = 1 WHERE id = (SELECT user_id FROM company_memberships WHERE id = ?)",
+            (membership_id,),
+        )
     db.commit()
     return {"ok": True}
 
@@ -400,22 +474,34 @@ def update_member(
 # ---------------------------------------------------------------------------
 # Projetos
 # ---------------------------------------------------------------------------
+class VisibilityItemIn(BaseModel):
+    membership_id: int
+    can_create_tasks: bool = False
+
+
+class VisibilityIn(BaseModel):
+    membership_ids: Optional[list[int]] = None
+    items: Optional[list[VisibilityItemIn]] = None
+
+
 class ProjectIn(BaseModel):
     name: str
     description: str = ""
+    due_date: Optional[str] = None
     visible_to: list[int] = []
+    visibility_items: list[VisibilityItemIn] = []
 
     _n = field_validator("name")(lambda cls, v: _clean_name(v, "O nome do projeto"))
+    _d = field_validator("due_date")(lambda cls, v: _clean_date(v))
 
 
 class ProjectPatch(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     status: Optional[Literal["active", "archived"]] = None
+    due_date: Optional[str] = None  # distinguimos "ausente" de null via model_fields_set
 
-
-class VisibilityIn(BaseModel):
-    membership_ids: list[int]
+    _d = field_validator("due_date")(lambda cls, v: _clean_date(v))
 
 
 def can_access_project(db, m, project_id: int) -> bool:
@@ -425,6 +511,16 @@ def can_access_project(db, m, project_id: int) -> bool:
         "SELECT 1 FROM project_visibilities WHERE project_id = ? AND membership_id = ?",
         (project_id, m["id"]),
     ).fetchone())
+
+
+def can_create_task_in_project(db, m, project_id: int) -> bool:
+    if m["role"] == "master":
+        return True
+    row = db.execute(
+        "SELECT can_create_tasks FROM project_visibilities WHERE project_id = ? AND membership_id = ?",
+        (project_id, m["id"]),
+    ).fetchone()
+    return bool(row and row["can_create_tasks"])
 
 
 def get_project_or_404(db, company_id: int, project_id: int):
@@ -449,48 +545,67 @@ def valid_collaborator_ids(db, company_id: int, ids: list[int]) -> list[int]:
     return [r["id"] for r in rows]
 
 
-def set_visibility(db, project_id: int, granted_by: int, company_id: int, ids: list[int]):
-    valid = valid_collaborator_ids(db, company_id, ids)
+def set_visibility(db, project_id: int, granted_by: int, company_id: int, items_or_ids):
+    items_to_set = []
+    if items_or_ids:
+        first = items_or_ids[0]
+        if isinstance(first, int):
+            valid_ids = valid_collaborator_ids(db, company_id, items_or_ids)
+            items_to_set = [{"membership_id": mid, "can_create_tasks": False} for mid in valid_ids]
+        else:
+            raw_items = [
+                i.model_dump() if hasattr(i, "model_dump") else (i.dict() if hasattr(i, "dict") else dict(i))
+                for i in items_or_ids
+            ]
+            ids = [i["membership_id"] for i in raw_items]
+            valid_ids = set(valid_collaborator_ids(db, company_id, ids))
+            items_to_set = [
+                {"membership_id": i["membership_id"], "can_create_tasks": bool(i.get("can_create_tasks", False))}
+                for i in raw_items if i["membership_id"] in valid_ids
+            ]
+
     db.execute("DELETE FROM project_visibilities WHERE project_id = ?", (project_id,))
-    for mid in valid:
+    for it in items_to_set:
         db.execute(
-            """INSERT INTO project_visibilities (project_id, membership_id, granted_by_membership_id)
-               VALUES (?, ?, ?)""",
-            (project_id, mid, granted_by),
+            """INSERT INTO project_visibilities (project_id, membership_id, granted_by_membership_id, can_create_tasks)
+               VALUES (?, ?, ?, ?)""",
+            (project_id, it["membership_id"], granted_by, 1 if it["can_create_tasks"] else 0),
         )
-    return valid
+    return [it["membership_id"] for it in items_to_set]
 
 
 @app.get("/api/companies/{company_id}/projects")
 def list_projects(company_id: int, m=Depends(member_ctx), db=Depends(get_db)):
     if m["role"] == "master":
         rows = db.execute(
-            "SELECT id, name, description, status FROM projects WHERE company_id = ? ORDER BY name",
+            "SELECT id, name, description, status, due_date FROM projects WHERE company_id = ? ORDER BY name",
             (company_id,),
         ).fetchall()
+        return [{**dict(r), "can_create_tasks": True} for r in rows]
     else:
         rows = db.execute(
-            """SELECT p.id, p.name, p.description, p.status FROM projects p
+            """SELECT p.id, p.name, p.description, p.status, p.due_date, v.can_create_tasks FROM projects p
                JOIN project_visibilities v ON v.project_id = p.id
                WHERE p.company_id = ? AND v.membership_id = ? ORDER BY p.name""",
             (company_id, m["id"]),
         ).fetchall()
-    return [dict(r) for r in rows]
+        return [{**dict(r), "can_create_tasks": bool(r["can_create_tasks"])} for r in rows]
 
 
 @app.post("/api/companies/{company_id}/projects", status_code=201)
 def create_project(company_id: int, data: ProjectIn, m=Depends(master_ctx), db=Depends(get_db)):
     cur = db.execute(
-        """INSERT INTO projects (company_id, name, description, created_by_membership_id)
-           VALUES (?, ?, ?, ?)""",
-        (company_id, data.name, data.description.strip(), m["id"]),
+        """INSERT INTO projects (company_id, name, description, due_date, created_by_membership_id)
+           VALUES (?, ?, ?, ?, ?)""",
+        (company_id, data.name, data.description.strip(), data.due_date, m["id"]),
     )
-    set_visibility(db, cur.lastrowid, m["id"], company_id, data.visible_to)
+    items = data.visibility_items if data.visibility_items else data.visible_to
+    set_visibility(db, cur.lastrowid, m["id"], company_id, items)
     db.commit()
     p = db.execute(
-        "SELECT id, name, description, status FROM projects WHERE id = ?", (cur.lastrowid,)
+        "SELECT id, name, description, status, due_date FROM projects WHERE id = ?", (cur.lastrowid,)
     ).fetchone()
-    return dict(p)
+    return {**dict(p), "can_create_tasks": True}
 
 
 @app.get("/api/companies/{company_id}/projects/{project_id}")
@@ -498,7 +613,9 @@ def get_project(company_id: int, project_id: int, m=Depends(member_ctx), db=Depe
     p = get_project_or_404(db, company_id, project_id)
     if not can_access_project(db, m, project_id):
         raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
-    return {k: p[k] for k in ("id", "name", "description", "status")}
+    data = {k: p[k] for k in ("id", "name", "description", "status", "due_date")}
+    data["can_create_tasks"] = can_create_task_in_project(db, m, project_id)
+    return data
 
 
 @app.patch("/api/companies/{company_id}/projects/{project_id}")
@@ -515,21 +632,25 @@ def update_project(
             raise HTTPException(status_code=422, detail=str(e))
     description = data.description.strip() if data.description is not None else p["description"]
     status = data.status or p["status"]
+    due_date = data.due_date if "due_date" in data.model_fields_set else p["due_date"]
     db.execute(
-        "UPDATE projects SET name = ?, description = ?, status = ? WHERE id = ?",
-        (name, description, status, project_id),
+        "UPDATE projects SET name = ?, description = ?, status = ?, due_date = ? WHERE id = ?",
+        (name, description, status, due_date, project_id),
     )
     db.commit()
-    return {"id": project_id, "name": name, "description": description, "status": status}
+    return {"id": project_id, "name": name, "description": description, "status": status, "due_date": due_date}
 
 
 @app.get("/api/companies/{company_id}/projects/{project_id}/visibility")
 def get_visibility(company_id: int, project_id: int, m=Depends(master_ctx), db=Depends(get_db)):
     get_project_or_404(db, company_id, project_id)
     rows = db.execute(
-        "SELECT membership_id FROM project_visibilities WHERE project_id = ?", (project_id,)
+        "SELECT membership_id, can_create_tasks FROM project_visibilities WHERE project_id = ?", (project_id,)
     ).fetchall()
-    return {"membership_ids": [r["membership_id"] for r in rows]}
+    return {
+        "membership_ids": [r["membership_id"] for r in rows],
+        "items": [{"membership_id": r["membership_id"], "can_create_tasks": bool(r["can_create_tasks"])} for r in rows],
+    }
 
 
 @app.put("/api/companies/{company_id}/projects/{project_id}/visibility")
@@ -538,9 +659,27 @@ def put_visibility(
     m=Depends(master_ctx), db=Depends(get_db),
 ):
     get_project_or_404(db, company_id, project_id)
-    valid = set_visibility(db, project_id, m["id"], company_id, data.membership_ids)
+    items = data.items if data.items is not None else (data.membership_ids or [])
+    set_visibility(db, project_id, m["id"], company_id, items)
     db.commit()
-    return {"membership_ids": valid}
+    rows = db.execute(
+        "SELECT membership_id, can_create_tasks FROM project_visibilities WHERE project_id = ?", (project_id,)
+    ).fetchall()
+    return {
+        "membership_ids": [r["membership_id"] for r in rows],
+        "items": [{"membership_id": r["membership_id"], "can_create_tasks": bool(r["can_create_tasks"])} for r in rows],
+    }
+
+
+@app.delete("/api/companies/{company_id}/projects/{project_id}")
+def delete_project(
+    company_id: int, project_id: int,
+    m=Depends(master_ctx), db=Depends(get_db),
+):
+    get_project_or_404(db, company_id, project_id)
+    db.execute("DELETE FROM projects WHERE id = ? AND company_id = ?", (project_id, company_id))
+    db.commit()
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -570,6 +709,12 @@ class AssigneesIn(BaseModel):
     membership_ids: list[int]
 
 
+class TaskOrderIn(BaseModel):
+    status: Status
+    task_ids: list[int]
+    project_id: Optional[int] = None  # None = Tarefas Gerais
+
+
 class SubtaskIn(BaseModel):
     title: str
 
@@ -590,9 +735,15 @@ def get_task_or_404(db, company_id: int, task_id: int):
 
 
 def ensure_can_see_task(db, m, task):
-    # Tarefa Geral: pública na empresa. Tarefa de Projeto: restrita a quem tem acesso ao projeto.
-    if task["project_id"] is not None and not can_access_project(db, m, task["project_id"]):
-        raise HTTPException(status_code=403, detail="Você não tem acesso a esta tarefa.")
+    if m["role"] == "master":
+        return
+    if task["project_id"] is not None:
+        if not can_access_project(db, m, task["project_id"]):
+            raise HTTPException(status_code=403, detail="Você não tem acesso a esta tarefa.")
+    else:
+        # Tarefa Geral: visível apenas para quem criou ou quem está atribuído a ela
+        if task["created_by_membership_id"] != m["id"] and not is_assignee(db, task["id"], m["id"]):
+            raise HTTPException(status_code=403, detail="Você não tem acesso a esta tarefa.")
 
 
 def is_assignee(db, task_id: int, membership_id: int) -> bool:
@@ -625,9 +776,10 @@ def serialize_task(db, task) -> dict:
     ).fetchone()
     project_name = None
     if t["project_id"] is not None:
-        project_name = db.execute(
+        p_row = db.execute(
             "SELECT name FROM projects WHERE id = ?", (t["project_id"],)
-        ).fetchone()["name"]
+        ).fetchone()
+        project_name = p_row["name"] if p_row else None
     t["assignees"] = [dict(a) for a in assignees]
     t["subtasks"] = [{**dict(s), "is_completed": bool(s["is_completed"])} for s in subtasks]
     t["created_by_name"] = creator["name"] if creator else None
@@ -637,6 +789,54 @@ def serialize_task(db, task) -> dict:
 
 def touch_task(db, task_id: int):
     db.execute("UPDATE tasks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (task_id,))
+
+
+def next_position(db, company_id: int, project_id: Optional[int], status: str) -> int:
+    """Próxima posição (final da coluna) para o status dentro do escopo (Gerais ou projeto)."""
+    row = db.execute(
+        """SELECT COALESCE(MAX(position), 0) FROM tasks
+           WHERE company_id = ? AND project_id IS ? AND status = ?""",
+        (company_id, project_id, status),
+    ).fetchone()
+    return row[0] + 1
+
+
+def list_scope_tasks(db, company_id: int, project_id: Optional[int], m=None) -> list[dict]:
+    """Tarefas de um escopo:
+    - Se project_id é especificado: tarefas daquele projeto específico.
+    - Se project_id é None (Tarefas Gerais):
+        - Para master: todas as tarefas da empresa (gerais e de qualquer projeto).
+        - Para colaborador: tarefas gerais onde é criador/atribuído + tarefas dos projetos aos quais tem acesso.
+    """
+    if project_id is not None:
+        rows = db.execute(
+            "SELECT * FROM tasks WHERE company_id = ? AND project_id = ? ORDER BY position, id",
+            (company_id, project_id),
+        ).fetchall()
+    else:
+        if m and m["role"] != "master":
+            rows = db.execute(
+                """SELECT * FROM tasks
+                   WHERE company_id = ? AND (
+                       (
+                           project_id IS NULL AND (
+                               created_by_membership_id = ? OR
+                               id IN (SELECT task_id FROM task_assignees WHERE membership_id = ?)
+                           )
+                       ) OR (
+                           project_id IS NOT NULL AND
+                           project_id IN (SELECT project_id FROM project_visibilities WHERE membership_id = ?)
+                       )
+                   )
+                   ORDER BY position, id""",
+                (company_id, m["id"], m["id"], m["id"]),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM tasks WHERE company_id = ? ORDER BY position, id",
+                (company_id,),
+            ).fetchall()
+    return [serialize_task(db, r) for r in rows]
 
 
 def valid_member_ids(db, company_id: int, ids: list[int]) -> list[int]:
@@ -656,21 +856,53 @@ def list_tasks(
     company_id: int, project_id: Optional[int] = None,
     m=Depends(member_ctx), db=Depends(get_db),
 ):
-    """Sem project_id: mural de Tarefas Gerais. Com project_id: tarefas do projeto (se houver acesso)."""
-    if project_id is None:
-        rows = db.execute(
-            "SELECT * FROM tasks WHERE company_id = ? AND project_id IS NULL ORDER BY id DESC",
-            (company_id,),
-        ).fetchall()
-    else:
+    """Sem project_id: mural de Tarefas Gerais (inclui tarefas de projetos com acesso). Com project_id: tarefas do projeto (se houver acesso)."""
+    if project_id is not None:
         get_project_or_404(db, company_id, project_id)
         if not can_access_project(db, m, project_id):
             raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
-        rows = db.execute(
-            "SELECT * FROM tasks WHERE company_id = ? AND project_id = ? ORDER BY id DESC",
-            (company_id, project_id),
-        ).fetchall()
-    return [serialize_task(db, r) for r in rows]
+    return list_scope_tasks(db, company_id, project_id, m=m)
+
+
+@app.put("/api/companies/{company_id}/tasks/order")
+def reorder_tasks(
+    company_id: int, data: TaskOrderIn,
+    m=Depends(member_ctx), db=Depends(get_db),
+):
+    """Define a ordem final de uma coluna do Kanban (Tarefas Gerais ou de um projeto).
+    Tarefas vindas de outra coluna têm o status alterado, respeitando a mesma regra de permissão do PATCH."""
+    if data.project_id is not None:
+        get_project_or_404(db, company_id, data.project_id)
+        if not can_access_project(db, m, data.project_id):
+            raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
+    ids = list(dict.fromkeys(data.task_ids))
+    is_master = m["role"] == "master"
+    changes = []
+    for tid in ids:
+        task = get_task_or_404(db, company_id, tid)
+        if data.project_id is not None and task["project_id"] != data.project_id:
+            raise HTTPException(status_code=400, detail="Tarefa não pertence a este quadro.")
+        if data.project_id is None:
+            if task["project_id"] is not None:
+                if not can_access_project(db, m, task["project_id"]):
+                    raise HTTPException(status_code=403, detail="Você não tem acesso ao projeto desta tarefa.")
+            else:
+                if not is_master and task["created_by_membership_id"] != m["id"] and not is_assignee(db, tid, m["id"]):
+                    raise HTTPException(status_code=403, detail="Você não tem acesso a esta tarefa.")
+        status_changed = task["status"] != data.status
+        if status_changed and not is_master and not is_assignee(db, tid, m["id"]):
+            raise HTTPException(status_code=403, detail="Você precisa estar atribuído à tarefa para alterar o status.")
+        changes.append((tid, status_changed))
+    for pos, (tid, status_changed) in enumerate(changes, start=1):
+        if status_changed:
+            db.execute(
+                "UPDATE tasks SET status = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (data.status, pos, tid),
+            )
+        else:
+            db.execute("UPDATE tasks SET position = ? WHERE id = ?", (pos, tid))
+    db.commit()
+    return list_scope_tasks(db, company_id, data.project_id, m=m)
 
 
 @app.post("/api/companies/{company_id}/tasks", status_code=201)
@@ -683,14 +915,28 @@ def create_task(company_id: int, data: TaskIn, m=Depends(member_ctx), db=Depends
                 raise HTTPException(status_code=400, detail="Projeto arquivado não aceita novas tarefas.")
         assignees = valid_member_ids(db, company_id, data.assignee_ids)
     else:
-        # Colaborador: sempre Tarefa Geral, auto-atribuída a si mesmo, sem atribuir a terceiros.
-        project_id = None
-        assignees = [m["id"]]
+        project_id = data.project_id
+        if project_id is not None:
+            project = get_project_or_404(db, company_id, project_id)
+            if not can_access_project(db, m, project_id):
+                raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
+            if project["status"] == "archived":
+                raise HTTPException(status_code=400, detail="Projeto arquivado não aceita novas tarefas.")
+            if not can_create_task_in_project(db, m, project_id):
+                raise HTTPException(status_code=403, detail="Você não tem permissão para criar tarefas neste projeto.")
+            # Colaborador nunca pode atribuir a outro login. Pode apenas se auto-atribuir ou deixar livre para outros membros pegarem.
+            assignees = [m["id"]] if (m["id"] in data.assignee_ids) else []
+        else:
+            # Tarefa Geral de colaborador é sempre pessoal
+            assignees = [m["id"]]
     due_val = data.due_date.strip() if data.due_date and data.due_date.strip() else None
     cur = db.execute(
-        """INSERT INTO tasks (company_id, project_id, title, description, priority, due_date, created_by_membership_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (company_id, project_id, data.title, data.description.strip(), data.priority, due_val, m["id"]),
+        """INSERT INTO tasks (company_id, project_id, title, description, priority, due_date, position, created_by_membership_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            company_id, project_id, data.title, data.description.strip(), data.priority, due_val,
+            next_position(db, company_id, project_id, "todo"), m["id"],
+        ),
     )
     for mid in assignees:
         db.execute("INSERT INTO task_assignees (task_id, membership_id) VALUES (?, ?)", (cur.lastrowid, mid))
@@ -728,6 +974,10 @@ def update_task(
         updates["due_date"] = data.due_date.strip() if data.due_date and data.due_date.strip() else None
     if "status" in fields and data.status is not None:
         updates["status"] = data.status  # sem trava de sub-tarefas em aberto
+        if data.status != task["status"]:
+            # Muda de coluna: vai para o final da coluna de destino
+            target_project = data.project_id if "project_id" in fields else task["project_id"]
+            updates["position"] = next_position(db, company_id, target_project, data.status)
     if "project_id" in fields:
         if data.project_id is not None:
             project = get_project_or_404(db, company_id, data.project_id)
@@ -748,6 +998,19 @@ def claim_task(company_id: int, task_id: int, m=Depends(member_ctx), db=Depends(
     ensure_can_see_task(db, m, task)
     db.execute(
         "INSERT OR IGNORE INTO task_assignees (task_id, membership_id) VALUES (?, ?)",
+        (task_id, m["id"]),
+    )
+    touch_task(db, task_id)
+    db.commit()
+    return serialize_task(db, get_task_or_404(db, company_id, task_id))
+
+
+@app.delete("/api/companies/{company_id}/tasks/{task_id}/claim")
+def unclaim_task(company_id: int, task_id: int, m=Depends(member_ctx), db=Depends(get_db)):
+    task = get_task_or_404(db, company_id, task_id)
+    ensure_can_see_task(db, m, task)
+    db.execute(
+        "DELETE FROM task_assignees WHERE task_id = ? AND membership_id = ?",
         (task_id, m["id"]),
     )
     touch_task(db, task_id)

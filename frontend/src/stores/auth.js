@@ -46,6 +46,15 @@ export const useAuthStore = defineStore('auth', () => {
     applyPayload(await api(`/companies/${companyId}`, { method: 'DELETE' }))
   }
 
+  async function changePassword(currentPassword, newPassword) {
+    const data = await api('/auth/change-password', {
+      method: 'POST',
+      body: { current_password: currentPassword, new_password: newPassword },
+    })
+    applyPayload(data)
+    return data
+  }
+
   function logout() {
     token.value = null
     user.value = null
@@ -56,6 +65,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token, user, memberships, canCreateCompany, isAuthenticated,
-    setup, login, fetchMe, createCompany, updateCompany, deleteCompany, logout,
+    setup, login, fetchMe, createCompany, updateCompany, deleteCompany, changePassword, logout,
   }
 })

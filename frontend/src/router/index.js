@@ -10,11 +10,13 @@ import CompanyWorkspaceLayout from '../views/CompanyWorkspaceLayout.vue'
 import TasksView from '../views/TasksView.vue'
 import ProjectView from '../views/ProjectView.vue'
 import MembersView from '../views/MembersView.vue'
+import ChangePasswordView from '../views/ChangePasswordView.vue'
 
 const routes = [
   { path: '/', redirect: '/companies' },
   { path: '/setup', name: 'setup', component: SetupView, meta: { public: true } },
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
+  { path: '/primeiro-acesso', name: 'primeiro-acesso', component: ChangePasswordView },
   { path: '/companies', name: 'companies', component: CompanyLobbyView },
   {
     path: '/companies/:companyId',
@@ -57,6 +59,14 @@ router.beforeEach(async (to) => {
       return to.meta.public ? true : { name: 'login' }
     }
   }
+
+  // 2.1 Troca obrigatória de senha inicial (Primeiro Acesso de colaborador)
+  if (auth.user?.must_change_password) {
+    if (to.name !== 'primeiro-acesso') return { name: 'primeiro-acesso' }
+    return true
+  }
+  if (to.name === 'primeiro-acesso') return { name: 'companies' }
+
   if (to.name === 'login') return { name: 'companies' }
 
   // 3. Workspace da empresa: carrega activeMembership e aplica RBAC de rota

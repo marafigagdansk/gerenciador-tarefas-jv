@@ -73,6 +73,7 @@ const salvarCampos = () => run(() => store.updateTask(props.task.id, {
 const mudarStatus = (e) => run(() => store.updateTask(props.task.id, { status: e.target.value }, props.scopeProjectId))
 const concluir = () => run(() => store.updateTask(props.task.id, { status: 'done' }, props.scopeProjectId))
 const pegar = () => run(() => store.claimTask(props.task.id, props.scopeProjectId))
+const largar = () => run(() => store.unclaimTask(props.task.id, props.scopeProjectId))
 const moverProjeto = (e) => {
   const v = e.target.value
   return run(() => store.updateTask(props.task.id, { project_id: v === '' ? null : Number(v) }, props.scopeProjectId))
@@ -204,9 +205,9 @@ const toggleSub = (s, e) => run(() => store.toggleSubtask(props.task.id, s.id, e
               <UserPlus :size="14" />
               Pegar Tarefa
             </button>
-            <button v-else class="btn btn-secondary btn-sm" disabled>
+            <button v-else id="btn-largar-tarefa" class="btn btn-secondary btn-sm" :disabled="salvando" @click="largar" title="Clique para desatribuir-se desta tarefa">
               <Check :size="14" />
-              Já atribuído
+              Atribuído (Largar)
             </button>
           </div>
           <ul v-if="task.assignees.length" class="plain-list">
@@ -347,11 +348,11 @@ h4 {
 }
 
 .btn-header-danger {
-  color: #f87171;
+  color: #B91C1C;
 }
 
 .btn-header-danger:hover {
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.15);
+  color: #991B1B;
+  background: #FEF2F2;
 }
 </style>

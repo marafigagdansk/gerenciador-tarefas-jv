@@ -44,16 +44,17 @@ function sair() {
 
 .navbar {
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: var(--bg-card);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
   position: sticky;
   top: 0;
   z-index: 40;
 }
 
 .navbar-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0.8rem 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.8rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;

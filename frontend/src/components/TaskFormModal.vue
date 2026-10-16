@@ -22,7 +22,10 @@ const carregando = ref(false)
 
 const isMaster = computed(() => company.isMasterInCurrentCompany)
 const activeMembers = computed(() => company.members.filter((m) => m.is_active))
-const openProjects = computed(() => company.projects.filter((p) => p.status === 'active'))
+const openProjects = computed(() =>
+  company.projects.filter((p) => p.status === 'active' && (isMaster.value || p.can_create_tasks))
+)
+const autoAssignMe = ref(false)
 
 watch(() => props.isOpen, (open) => {
   if (!open) return
@@ -32,6 +35,7 @@ watch(() => props.isOpen, (open) => {
   dueDate.value = ''
   targetProject.value = props.projectId
   assignees.value = []
+  autoAssignMe.value = false
   erro.value = ''
 })
 
@@ -44,10 +48,16 @@ async function salvar() {
       description: description.value,
       priority: priority.value,
       due_date: dueDate.value || null,
+      project_id: targetProject.value,
     }
     if (isMaster.value) {
-      payload.project_id = targetProject.value
       payload.assignee_ids = assignees.value
+    } else {
+      if (targetProject.value === null || autoAssignMe.value) {
+        payload.assignee_ids = [company.activeMembership?.id].filter(Boolean)
+      } else {
+        payload.assignee_ids = []
+      }
     }
     await store.createTask(payload, props.projectId)
     emit('close')
@@ -119,7 +129,28 @@ async function salvar() {
             </div>
           </div>
         </template>
-        <p v-else class="alert-info">Esta tarefa será criada como Tarefa Geral e atribuída a você.</p>
+        <template v-else>
+          <div v-if="openProjects.length > 0" class="form-group">
+            <label for="tarefa-projeto">Projeto</label>
+            <select id="tarefa-projeto" v-model="targetProject">
+              <option :value="null">Tarefa Geral (sem projeto)</option>
+              <option v-for="p in openProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </div>
+          <div v-if="targetProject" class="form-group">
+            <label class="check-row">
+              <input type="checkbox" v-model="autoAssignMe" />
+              <span>Pegar esta tarefa para mim agora</span>
+            </label>
+            <span class="hint">Se desmarcado, a tarefa ficará disponível para qualquer membro do projeto pegar.</span>
+          </div>
+          <p v-if="!targetProject" class="alert-info">
+            Esta tarefa será criada em <strong>Tarefas Gerais</strong> (visível apenas para você) e atribuída a você.
+          </p>
+          <p v-else class="alert-info">
+            Esta tarefa ficará vinculada ao <strong>Projeto</strong> e visível para todos os membros atribuídos poderem pegar a tarefa.
+          </p>
+        </template>
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" @click="emit('close')" :disabled="carregando">Cancelar</button>

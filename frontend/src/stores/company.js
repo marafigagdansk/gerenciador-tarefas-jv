@@ -17,9 +17,14 @@ export const useCompanyStore = defineStore('company', () => {
     company.value = { id: data.id, name: data.name, cnpj: data.cnpj }
     activeMembership.value = data.membership
     try {
-      await Promise.all([fetchMembers(data.id), fetchProjects(data.id)])
+      await fetchProjects(data.id)
     } catch (e) {
-      console.warn('Aviso: falha ao carregar membros ou projetos secundários:', e)
+      console.warn('Aviso: falha ao carregar projetos da empresa:', e)
+    }
+    try {
+      await fetchMembers(data.id)
+    } catch (e) {
+      console.warn('Aviso: falha ao carregar membros da empresa:', e)
     }
   }
 
@@ -67,15 +72,22 @@ export const useCompanyStore = defineStore('company', () => {
   }
 
   async function getVisibility(projectId) {
-    const r = await api(`/companies/${companyId.value}/projects/${projectId}/visibility`)
-    return r.membership_ids
+    return api(`/companies/${companyId.value}/projects/${projectId}/visibility`)
   }
 
-  async function setVisibility(projectId, ids) {
-    await api(`/companies/${companyId.value}/projects/${projectId}/visibility`, {
+  async function setVisibility(projectId, itemsOrIds) {
+    const payload = Array.isArray(itemsOrIds) && itemsOrIds.length > 0 && typeof itemsOrIds[0] === 'object'
+      ? { items: itemsOrIds }
+      : { membership_ids: itemsOrIds }
+    return api(`/companies/${companyId.value}/projects/${projectId}/visibility`, {
       method: 'PUT',
-      body: { membership_ids: ids },
+      body: payload,
     })
+  }
+
+  async function deleteProject(id) {
+    await api(`/companies/${companyId.value}/projects/${id}`, { method: 'DELETE' })
+    await fetchProjects()
   }
 
   function reset() {
@@ -88,6 +100,6 @@ export const useCompanyStore = defineStore('company', () => {
   return {
     company, activeMembership, members, projects, companyId, isMasterInCurrentCompany,
     load, fetchMembers, fetchProjects, lookupMember, addMember, updateMember,
-    createProject, updateProject, getVisibility, setVisibility, reset,
+    createProject, updateProject, deleteProject, getVisibility, setVisibility, reset,
   }
 })

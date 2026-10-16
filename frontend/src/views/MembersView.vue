@@ -150,13 +150,13 @@ async function alterar(m, patch) {
           </div>
 
           <template v-if="lookup && !lookup.exists">
-            <p class="alert-info">E-mail novo: informe o nome e a senha inicial para criar o acesso.</p>
+            <p class="alert-info">E-mail novo: informe o nome e uma senha provisória. O usuário deverá criar uma nova senha pessoal no seu primeiro acesso.</p>
             <div class="form-group">
               <label for="membro-nome">Nome completo</label>
               <input id="membro-nome" v-model="name" type="text" required autocomplete="off" />
             </div>
             <div class="form-group">
-              <label for="membro-senha">Senha inicial (mín. 6 caracteres)</label>
+              <label for="membro-senha">Senha provisória (mín. 6 caracteres)</label>
               <input id="membro-senha" v-model="password" type="password" required minlength="6" autocomplete="new-password" />
             </div>
           </template>

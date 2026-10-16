@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { Plus } from 'lucide-vue-next'
 import CardEmpresa from '../components/CardEmpresa.vue'
@@ -15,6 +15,10 @@ const modalEditarAberto = ref(false)
 
 const empresaParaExcluir = ref(null)
 const modalExcluirAberto = ref(false)
+
+onMounted(() => {
+  auth.fetchMe().catch(() => {})
+})
 
 function onEditar(membership) {
   empresaParaEditar.value = membership
@@ -41,8 +45,18 @@ function onExcluir(membership) {
     </div>
 
     <div v-if="auth.memberships.length === 0" class="empty-box">
-      <h3>Nenhuma empresa vinculada</h3>
-      <p>Peça a um Master para adicionar você a uma empresa.</p>
+      <template v-if="auth.canCreateCompany">
+        <h3>Nenhuma empresa vinculada</h3>
+        <p>Você ainda não possui empresas cadastradas. Crie sua empresa para abrir o workspace.</p>
+        <button id="btn-criar-empresa-empty" class="btn btn-primary empty-box-btn" @click="modalAberto = true">
+          <Plus :size="16" />
+          Criar Nova Empresa
+        </button>
+      </template>
+      <template v-else>
+        <h3>Nenhuma empresa vinculada</h3>
+        <p>Peça a um Master para adicionar você a uma empresa.</p>
+      </template>
     </div>
 
     <div v-else class="empresas-grid">
@@ -76,5 +90,10 @@ function onExcluir(membership) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.25rem;
+}
+
+.empty-box-btn {
+  margin-top: 1.25rem;
+  display: inline-flex;
 }
 </style>
