@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { api, formatDate, formatFirstLastName, getInitials } from '../api'
 import { useCompanyStore } from '../stores/company'
 import { useTaskStore } from '../stores/task'
-import { Gauge, CalendarDays, Trash2, Users, UserPlus } from 'lucide-vue-next'
+import { useNotificationStore } from '../stores/notification'
+import { Gauge, CalendarDays, Trash2, Users, UserPlus, Star } from 'lucide-vue-next'
 import TaskWorkspace from '../components/TaskWorkspace.vue'
 import ProjectAccessModal from '../components/ProjectAccessModal.vue'
 import ProjectDeleteModal from '../components/ProjectDeleteModal.vue'
@@ -13,11 +14,23 @@ const route = useRoute()
 const router = useRouter()
 const company = useCompanyStore()
 const taskStore = useTaskStore()
+const notificationStore = useNotificationStore()
 
 const project = ref(null)
 const erro = ref('')
 const acessoAberto = ref(false)
 const modalExclusaoAberto = ref(false)
+
+async function alternarImportante() {
+  if (!project.value) return
+  try {
+    const novoValor = !project.value.is_important
+    project.value = await company.updateProject(project.value.id, { is_important: novoValor })
+    notificationStore.fetchOverviewRadar(company.companyId)
+  } catch (err) {
+    erro.value = err.message
+  }
+}
 
 function onProjetoExcluido() {
   modalExclusaoAberto.value = false
@@ -116,9 +129,30 @@ const situacao = computed(() => {
         <div class="project-info">
           <div class="project-badges">
             <span class="badge" :class="situacao.cls">{{ situacao.label }}</span>
+            <span v-if="project.is_important" class="badge badge-important">
+              <Star :size="12" fill="#EAB308" color="#CA8A04" />
+              Projeto Importante
+            </span>
           </div>
-          <h1>{{ project.name }}</h1>
+          <div class="project-title-row">
+            <h1>{{ project.name }}</h1>
+            <button
+              v-if="company.isMasterInCurrentCompany"
+              type="button"
+              class="btn-star-header"
+              :class="{ 'is-active': project.is_important }"
+              :title="project.is_important ? 'Remover dos importantes' : 'Marcar como projeto importante'"
+              @click="alternarImportante"
+            >
+              <Star
+                :size="22"
+                :fill="project.is_important ? '#EAB308' : 'none'"
+                :color="project.is_important ? '#CA8A04' : '#A8A29E'"
+              />
+            </button>
+          </div>
           <p v-if="project.description" class="project-description">{{ project.description }}</p>
+
 
           <!-- Espaço interativo dos colaboradores do projeto -->
           <div
@@ -253,8 +287,25 @@ const situacao = computed(() => {
 .project-badges {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.75rem;
+}
+
+.badge-important {
+  background: #FEF3C7;
+  color: #92400E;
+  border-color: #FDE68A;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.project-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .project-info h1 {
@@ -263,7 +314,32 @@ const situacao = computed(() => {
   line-height: 1.15;
   color: var(--text-main);
   overflow-wrap: anywhere;
+  margin: 0;
 }
+
+.btn-star-header {
+  background: #FAF9F8;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-star-header:hover {
+  background: #FFFFFF;
+  border-color: #CA8A04;
+  transform: scale(1.08);
+}
+
+.btn-star-header.is-active {
+  background: #FEF9C3;
+  border-color: #FDE047;
+}
+
 
 .project-description {
   margin-top: 0.6rem;

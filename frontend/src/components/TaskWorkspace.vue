@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useTaskStore } from '../stores/task'
 import { useCompanyStore } from '../stores/company'
+import { useNotificationStore } from '../stores/notification'
 import { STATUS_LABELS, PRIORITY_LABELS, formatDate } from '../api'
 import {
   Calendar, CalendarOff, Plus, UserPlus, Check, CheckSquare,
@@ -24,6 +25,7 @@ const props = defineProps({
 
 const store = useTaskStore()
 const company = useCompanyStore()
+const notifStore = useNotificationStore()
 
 const filtro = ref('all')
 const formAberto = ref(false)
@@ -197,6 +199,7 @@ function isAtrasada(task) {
 async function pegar(t) {
   try {
     await store.claimTask(t.id, props.projectId)
+    notifStore.fetchOverviewRadar(company.companyId)
   } catch (err) {
     erro.value = err.message
   }
@@ -211,10 +214,20 @@ async function onMover({ status, ids }) {
     const hiddenIds = colTaskIdsAll.filter((id) => !ids.includes(id))
     const finalIds = [...ids, ...hiddenIds]
     await store.reorderTasks(status, finalIds, props.projectId)
+    notifStore.fetchOverviewRadar(company.companyId)
   } catch (err) {
     erro.value = err.message
   }
 }
+
+function abrirTarefa(t) {
+  if (!t) return
+  abertaId.value = typeof t === 'object' ? t.id : Number(t)
+}
+
+defineExpose({
+  abrirTarefa,
+})
 </script>
 
 <template>
@@ -400,12 +413,16 @@ async function onMover({ status, ids }) {
       </li>
     </ul>
 
-    <TaskFormModal :is-open="formAberto" :project-id="projectId" @close="formAberto = false" />
+    <TaskFormModal
+      :is-open="formAberto"
+      :project-id="projectId"
+      @close="formAberto = false; notifStore.fetchOverviewRadar(company.companyId)"
+    />
     <TaskDetailModal
       v-if="aberta"
       :task="aberta"
       :scope-project-id="projectId"
-      @close="abertaId = null"
+      @close="abertaId = null; notifStore.fetchOverviewRadar(company.companyId)"
       @request-delete="abrirModalExclusao"
     />
     <TaskDeleteModal

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useCompanyStore } from '../stores/company'
-import { X } from 'lucide-vue-next'
+import { X, Star } from 'lucide-vue-next'
 import CustomDatePicker from './CustomDatePicker.vue'
 
 const props = defineProps({ isOpen: Boolean })
@@ -11,6 +11,7 @@ const company = useCompanyStore()
 const name = ref('')
 const description = ref('')
 const dueDate = ref('')
+const isImportant = ref(false)
 const colabAccess = ref({})
 const erro = ref('')
 const carregando = ref(false)
@@ -24,6 +25,7 @@ watch(() => props.isOpen, (open) => {
     name.value = ''
     description.value = ''
     dueDate.value = ''
+    isImportant.value = false
     colabAccess.value = {}
     collaborators.value.forEach((m) => {
       colabAccess.value[m.id] = { selected: false, canCreate: false }
@@ -75,6 +77,8 @@ async function salvar() {
       name: name.value,
       description: description.value,
       due_date: dueDate.value || null,
+      target_date: dueDate.value || null,
+      is_important: isImportant.value,
       visible_to: visibilityItems.map((i) => i.membership_id),
       visibility_items: visibilityItems,
     })
@@ -108,13 +112,24 @@ async function salvar() {
           <textarea id="proj-desc" v-model="description" />
         </div>
         <div class="form-group">
-          <label for="proj-previsao">Previsão de conclusão</label>
+          <label for="proj-previsao">Prazo Final do Projeto</label>
           <CustomDatePicker
             id="proj-previsao"
             v-model="dueDate"
-            placeholder="Definir previsão de conclusão"
+            placeholder="Definir prazo final do projeto"
           />
         </div>
+        <div class="form-group">
+          <label class="check-row" style="cursor: pointer;">
+            <input type="checkbox" v-model="isImportant" />
+            <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+              <Star :size="15" :fill="isImportant ? '#EAB308' : 'none'" :color="isImportant ? '#CA8A04' : '#78716C'" />
+              Destacar como Projeto Importante
+            </span>
+          </label>
+          <span class="hint">Projetos importantes têm prioridade no Painel de Atenção e na barra lateral.</span>
+        </div>
+
         <div class="form-group">
           <span class="form-label">Colaboradores com acesso</span>
           <p class="hint" style="margin-bottom: 0.5rem">

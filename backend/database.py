@@ -84,6 +84,31 @@ CREATE TABLE IF NOT EXISTS subtasks (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    category TEXT NOT NULL,
+    severity TEXT DEFAULT 'info',
+    is_read INTEGER NOT NULL DEFAULT 0,
+    delivered_browser INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS task_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    membership_id INTEGER NOT NULL REFERENCES company_memberships(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, company_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_tasks_company_project ON tasks(company_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_user ON company_memberships(user_id);
 """
@@ -104,19 +129,32 @@ def init_db():
 
     # Migração: adiciona coluna due_date se a tabela tasks já existir sem ela
     cursor = conn.execute("PRAGMA table_info(tasks)")
-    columns = [row["name"] for row in cursor.fetchall()]
-    if "due_date" not in columns:
+    task_cols = [row["name"] for row in cursor.fetchall()]
+    if "due_date" not in task_cols:
         conn.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT DEFAULT NULL")
 
     # Migração: adiciona coluna position (ordem manual no Kanban); tarefas antigas seguem a ordem de criação
-    if "position" not in columns:
+    if "position" not in task_cols:
         conn.execute("ALTER TABLE tasks ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
         conn.execute("UPDATE tasks SET position = id")
 
-    # Migração: adiciona coluna due_date (previsão de conclusão) em projects
+    if "completed_at" not in task_cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN completed_at DATETIME DEFAULT NULL")
+
+    if "last_deadline_alert" not in task_cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN last_deadline_alert TEXT DEFAULT NULL")
+
+    # Migração: adiciona coluna due_date (previsão de conclusão), target_date e is_important em projects
     cursor = conn.execute("PRAGMA table_info(projects)")
-    if "due_date" not in [row["name"] for row in cursor.fetchall()]:
+    proj_cols = [row["name"] for row in cursor.fetchall()]
+    if "due_date" not in proj_cols:
         conn.execute("ALTER TABLE projects ADD COLUMN due_date TEXT DEFAULT NULL")
+
+    if "target_date" not in proj_cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN target_date TEXT DEFAULT NULL")
+
+    if "is_important" not in proj_cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN is_important INTEGER NOT NULL DEFAULT 0")
 
     # Migração: adiciona coluna can_create_tasks em project_visibilities
     cursor = conn.execute("PRAGMA table_info(project_visibilities)")
@@ -145,3 +183,4 @@ def init_db():
 
     conn.commit()
     conn.close()
+
