@@ -763,11 +763,7 @@ def create_project(company_id: int, data: ProjectIn, m=Depends(master_ctx), db=D
     return {**serialize_project_row(p), "can_create_tasks": True}
 
 
-@app.get("/api/companies/{company_id}/projects/{project_id}")
-def get_project(company_id: int, project_id: int, m=Depends(member_ctx), db=Depends(get_db)):
-    p = get_project_or_404(db, company_id, project_id)
-    if not can_access_project(db, m, project_id):
-        raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
+def serialize_project_full(db, m, p, project_id: int):
     data = serialize_project_row(p)
     data["can_create_tasks"] = can_create_task_in_project(db, m, project_id)
     colabs = db.execute(
@@ -784,6 +780,14 @@ def get_project(company_id: int, project_id: int, m=Depends(member_ctx), db=Depe
         for r in colabs
     ]
     return data
+
+
+@app.get("/api/companies/{company_id}/projects/{project_id}")
+def get_project(company_id: int, project_id: int, m=Depends(member_ctx), db=Depends(get_db)):
+    p = get_project_or_404(db, company_id, project_id)
+    if not can_access_project(db, m, project_id):
+        raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
+    return serialize_project_full(db, m, p, project_id)
 
 
 @app.patch("/api/companies/{company_id}/projects/{project_id}")
@@ -819,7 +823,8 @@ def update_project(
     )
     db.commit()
     updated = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
-    return serialize_project_row(updated)
+    return serialize_project_full(db, m, updated, project_id)
+
 
 
 @app.put("/api/projects/{project_id}")

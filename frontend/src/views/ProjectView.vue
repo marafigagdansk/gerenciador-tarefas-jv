@@ -25,12 +25,29 @@ async function alternarImportante() {
   if (!project.value) return
   try {
     const novoValor = !project.value.is_important
-    project.value = await company.updateProject(project.value.id, { is_important: novoValor })
+    const updated = await company.updateProject(project.value.id, { is_important: novoValor })
+    project.value = {
+      ...project.value,
+      ...updated,
+      collaborators: (updated && updated.collaborators) ? updated.collaborators : (project.value.collaborators || []),
+    }
     notificationStore.fetchOverviewRadar(company.companyId)
   } catch (err) {
     erro.value = err.message
   }
 }
+
+watch(
+  () => company.projects,
+  (projs) => {
+    if (!project.value || !Array.isArray(projs)) return
+    const p = projs.find((x) => x.id === project.value.id)
+    if (p && p.is_important !== undefined && p.is_important !== project.value.is_important) {
+      project.value.is_important = p.is_important
+    }
+  },
+  { deep: true }
+)
 
 function onProjetoExcluido() {
   modalExclusaoAberto.value = false
