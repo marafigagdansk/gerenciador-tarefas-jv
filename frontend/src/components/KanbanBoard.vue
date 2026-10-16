@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { STATUS_LABELS, PRIORITY_LABELS, formatDate } from '../api'
+import { STATUS_LABELS, PRIORITY_LABELS, formatDate, getInitials } from '../api'
 import { GripVertical, Calendar, CalendarOff, UserPlus, CheckSquare, FolderGit2 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -146,11 +146,6 @@ function progresso(t) {
   return Math.round((t.subtasks.filter((s) => s.is_completed).length / t.subtasks.length) * 100)
 }
 
-function initials(name) {
-  const p = (name || '?').trim().split(/\s+/)
-  return ((p[0][0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase()
-}
-
 function firstName(name) {
   return (name || '').trim().split(/\s+/)[0]
 }
@@ -243,7 +238,7 @@ function firstName(name) {
                     :key="a.membership_id"
                     class="kb-avatar"
                     :title="a.name"
-                  >{{ initials(a.name) }}</span>
+                  >{{ getInitials(a.name) }}</span>
                   <span class="kb-assignee-name">
                     {{ firstName(item.task.assignees[0].name) }}<template v-if="item.task.assignees.length > 1"> +{{ item.task.assignees.length - 1 }}</template>
                   </span>

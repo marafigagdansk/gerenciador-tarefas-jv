@@ -1,6 +1,7 @@
 <script setup>
 import { RouterView, RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import { formatFirstLastName, getInitials } from './api'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -25,7 +26,10 @@ function sair() {
         </RouterLink>
 
         <div v-if="auth.user" class="nav-user">
-          <span class="user-name">{{ auth.user.name }}</span>
+          <div class="user-pill" :title="auth.user.name">
+            <span class="user-avatar">{{ getInitials(auth.user.name) }}</span>
+            <span class="user-name">{{ formatFirstLastName(auth.user.name) }}</span>
+          </div>
           <button id="btn-sair" class="btn btn-secondary btn-sm" @click="sair">Sair</button>
         </div>
       </div>
@@ -90,8 +94,36 @@ function sair() {
   gap: 0.9rem;
 }
 
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.65rem 0.25rem 0.25rem;
+  background: #F5F5F4;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #F0FDFA;
+  color: #0F766E;
+  border: 1px solid #99F6E4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
 .user-name {
-  font-size: 0.9rem;
-  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
 }
 </style>

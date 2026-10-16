@@ -1,10 +1,10 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, formatDate } from '../api'
+import { api, formatDate, formatFirstLastName, getInitials } from '../api'
 import { useCompanyStore } from '../stores/company'
 import { useTaskStore } from '../stores/task'
-import { Gauge, CalendarDays, Trash2 } from 'lucide-vue-next'
+import { Gauge, CalendarDays, Trash2, Users, UserPlus } from 'lucide-vue-next'
 import TaskWorkspace from '../components/TaskWorkspace.vue'
 import ProjectAccessModal from '../components/ProjectAccessModal.vue'
 import ProjectDeleteModal from '../components/ProjectDeleteModal.vue'
@@ -26,8 +26,8 @@ function onProjetoExcluido() {
 
 const projectId = computed(() => Number(route.params.projectId))
 
-watch(projectId, async (id) => {
-  project.value = null
+async function carregarProjeto(id = projectId.value) {
+  if (!id) return
   erro.value = ''
   try {
     project.value = await api(`/companies/${company.companyId}/projects/${id}`)
@@ -35,7 +35,48 @@ watch(projectId, async (id) => {
     erro.value = err.message
     router.replace({ name: 'tasks', params: { companyId: company.companyId } })
   }
+}
+
+watch(projectId, (id) => {
+  project.value = null
+  carregarProjeto(id)
 }, { immediate: true })
+
+function onAcessoSalvo() {
+  carregarProjeto()
+}
+
+function clicarEspacoColaboradores() {
+  if (company.isMasterInCurrentCompany) {
+    acessoAberto.value = true
+  }
+}
+
+const AVATAR_PALETTES = [
+  { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  { bg: '#F0FDFA', text: '#0F766E', border: '#99F6E4' },
+  { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
+  { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
+  { bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
+  { bg: '#FDF2F8', text: '#BE185D', border: '#FBCFE8' },
+  { bg: '#F8FAFC', text: '#334155', border: '#CBD5E1' },
+]
+
+function avatarColorStyle(name) {
+  let hash = 0
+  const str = String(name || '')
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  const item = AVATAR_PALETTES[Math.abs(hash) % AVATAR_PALETTES.length]
+  return {
+    backgroundColor: item.bg,
+    color: item.text,
+    borderColor: item.border,
+  }
+}
+
 
 async function alternarArquivo() {
   const status = project.value.status === 'active' ? 'archived' : 'active'
@@ -78,6 +119,50 @@ const situacao = computed(() => {
           </div>
           <h1>{{ project.name }}</h1>
           <p v-if="project.description" class="project-description">{{ project.description }}</p>
+
+          <!-- Espaço interativo dos colaboradores do projeto -->
+          <div
+            class="project-collabs-bar"
+            :class="{ 'is-clickable': company.isMasterInCurrentCompany }"
+            :role="company.isMasterInCurrentCompany ? 'button' : undefined"
+            :tabindex="company.isMasterInCurrentCompany ? 0 : undefined"
+            @click="clicarEspacoColaboradores"
+            @keydown.enter="clicarEspacoColaboradores"
+            @keydown.space.prevent="clicarEspacoColaboradores"
+            :title="company.isMasterInCurrentCompany ? 'Clique para gerenciar colaboradores e permissões de criação de tarefas' : 'Colaboradores com acesso a este projeto'"
+          >
+            <span class="collabs-label">
+              <Users :size="13" />
+              <span>Colaboradores:</span>
+            </span>
+
+            <div v-if="project.collaborators && project.collaborators.length" class="collabs-avatars">
+              <div
+                v-for="c in project.collaborators"
+                :key="c.id"
+                class="collab-avatar-circle"
+                :style="avatarColorStyle(c.name)"
+                :title="formatFirstLastName(c.name) + (c.can_create_tasks ? ' • Pode criar tarefas' : '')"
+              >
+                <span>{{ getInitials(c.name) }}</span>
+                <span
+                  v-if="c.can_create_tasks"
+                  class="can-create-indicator"
+                  title="Permissão para criar tarefas habilitada"
+                ></span>
+              </div>
+            </div>
+
+            <div v-else class="collabs-empty">
+              <span class="collabs-empty-circle">
+                <UserPlus v-if="company.isMasterInCurrentCompany" :size="12" />
+                <span v-else>—</span>
+              </span>
+              <span class="collabs-empty-text">
+                {{ company.isMasterInCurrentCompany ? 'Nenhum colaborador atribuído. Clique para gerenciar.' : 'Nenhum colaborador atribuído.' }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="project-stats">
@@ -125,7 +210,12 @@ const situacao = computed(() => {
       :can-create="company.isMasterInCurrentCompany || Boolean(project.can_create_tasks)"
     />
 
-    <ProjectAccessModal :is-open="acessoAberto" :project-id="project.id" @close="acessoAberto = false" />
+    <ProjectAccessModal
+      :is-open="acessoAberto"
+      :project-id="project.id"
+      @close="acessoAberto = false"
+      @saved="onAcessoSalvo"
+    />
     <ProjectDeleteModal
       :is-open="modalExclusaoAberto"
       :project="project"
@@ -183,6 +273,111 @@ const situacao = computed(() => {
   color: var(--text-muted);
   overflow-wrap: anywhere;
   white-space: pre-line;
+}
+
+.project-collabs-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  padding: 0.4rem 0.75rem;
+  background: #F9FAFB;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  max-width: 100%;
+  flex-wrap: wrap;
+  transition: all 0.2s ease;
+}
+
+.project-collabs-bar.is-clickable {
+  cursor: pointer;
+}
+
+.project-collabs-bar.is-clickable:hover {
+  background: #F0FDFA;
+  border-color: #5EEAD4;
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.08);
+}
+
+.collabs-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.collabs-avatars {
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+}
+
+.collab-avatar-circle {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: -8px;
+  border-radius: 50%;
+  border: 2px solid #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.15s ease, z-index 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.collab-avatar-circle:first-child {
+  margin-left: 0;
+}
+
+.collab-avatar-circle:hover {
+  transform: translateY(-2px) scale(1.1);
+  z-index: 5;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.can-create-indicator {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #0F766E;
+  border: 1.5px solid #FFFFFF;
+}
+
+.collabs-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.collabs-empty-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: #FFFFFF;
+}
+
+.collabs-empty-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .project-stats {

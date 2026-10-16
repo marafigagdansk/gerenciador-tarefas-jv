@@ -77,3 +77,34 @@ export function formatDate(isoStr) {
   }
   return isoStr
 }
+
+/**
+ * Identifica pelos espaços o primeiro nome e o último sobrenome.
+ * Exemplo: 'Vinicius danciguer marafiga' -> 'Vinicius marafiga'
+ * Exemplo: 'Vinicius marafiga' -> 'Vinicius marafiga'
+ * Exemplo: 'Maria' -> 'Maria'
+ */
+export function formatFirstLastName(name) {
+  if (!name) return ''
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[parts.length - 1]}`
+}
+
+/**
+ * Retorna as iniciais do primeiro nome e do último sobrenome em maiúsculas.
+ * Exemplo: 'Vinicius danciguer marafiga' -> 'VM'
+ * Exemplo: 'Vinicius marafiga' -> 'VM'
+ * Exemplo: 'Maria' -> 'M'
+ */
+export function getInitials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  const first = parts[0][0]
+  const last = parts[parts.length - 1][0]
+  return (first + last).toUpperCase()
+}
+

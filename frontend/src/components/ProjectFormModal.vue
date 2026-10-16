@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useCompanyStore } from '../stores/company'
 import { X } from 'lucide-vue-next'
+import CustomDatePicker from './CustomDatePicker.vue'
 
 const props = defineProps({ isOpen: Boolean })
 const emit = defineEmits(['close', 'created'])
@@ -108,7 +109,11 @@ async function salvar() {
         </div>
         <div class="form-group">
           <label for="proj-previsao">Previsão de conclusão</label>
-          <input id="proj-previsao" v-model="dueDate" type="date" />
+          <CustomDatePicker
+            id="proj-previsao"
+            v-model="dueDate"
+            placeholder="Definir previsão de conclusão"
+          />
         </div>
         <div class="form-group">
           <span class="form-label">Colaboradores com acesso</span>

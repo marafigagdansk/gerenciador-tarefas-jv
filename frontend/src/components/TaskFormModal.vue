@@ -4,6 +4,8 @@ import { useTaskStore } from '../stores/task'
 import { useCompanyStore } from '../stores/company'
 import { PRIORITY_LABELS } from '../api'
 import { X, Plus } from 'lucide-vue-next'
+import CustomDatePicker from './CustomDatePicker.vue'
+import CustomSelect from './CustomSelect.vue'
 
 const props = defineProps({ isOpen: Boolean, projectId: { type: Number, default: null } })
 const emit = defineEmits(['close'])
@@ -26,6 +28,18 @@ const openProjects = computed(() =>
   company.projects.filter((p) => p.status === 'active' && (isMaster.value || p.can_create_tasks))
 )
 const autoAssignMe = ref(false)
+
+const priorityOptions = computed(() =>
+  Object.keys(PRIORITY_LABELS).map((k) => ({
+    value: k,
+    label: PRIORITY_LABELS[k],
+  }))
+)
+
+const projectOptions = computed(() => [
+  { value: null, label: 'Tarefa Geral (sem projeto)' },
+  ...openProjects.value.map((p) => ({ value: p.id, label: p.name })),
+])
 
 watch(() => props.isOpen, (open) => {
   if (!open) return
@@ -91,33 +105,31 @@ async function salvar() {
         </div>
         <div class="form-group">
           <label for="tarefa-prioridade">Prioridade</label>
-          <select id="tarefa-prioridade" v-model="priority">
-            <option v-for="(label, key) in PRIORITY_LABELS" :key="key" :value="key">{{ label }}</option>
-          </select>
+          <CustomSelect
+            id="tarefa-prioridade"
+            v-model="priority"
+            :options="priorityOptions"
+            type="priority"
+          />
         </div>
         <div class="form-group">
-          <div class="label-with-action">
-            <label for="tarefa-data-conclusao">Data de Conclusão (opcional)</label>
-            <button
-              v-if="dueDate"
-              type="button"
-              class="btn-text-action"
-              @click="dueDate = ''"
-            >
-              Limpar (indefinida)
-            </button>
-          </div>
-          <input id="tarefa-data-conclusao" v-model="dueDate" type="date" />
+          <label for="tarefa-data-conclusao">Data de Conclusão (opcional)</label>
+          <CustomDatePicker
+            id="tarefa-data-conclusao"
+            v-model="dueDate"
+            placeholder="Definir data de conclusão"
+          />
           <span class="hint">Caso não informada, a tarefa ficará com data indefinida.</span>
         </div>
 
         <template v-if="isMaster">
           <div class="form-group">
             <label for="tarefa-projeto">Projeto</label>
-            <select id="tarefa-projeto" v-model="targetProject">
-              <option :value="null">Tarefa Geral (sem projeto)</option>
-              <option v-for="p in openProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
+            <CustomSelect
+              id="tarefa-projeto"
+              v-model="targetProject"
+              :options="projectOptions"
+            />
           </div>
           <div class="form-group">
             <span class="form-label">Responsáveis (opcional)</span>
@@ -132,10 +144,11 @@ async function salvar() {
         <template v-else>
           <div v-if="openProjects.length > 0" class="form-group">
             <label for="tarefa-projeto">Projeto</label>
-            <select id="tarefa-projeto" v-model="targetProject">
-              <option :value="null">Tarefa Geral (sem projeto)</option>
-              <option v-for="p in openProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
+            <CustomSelect
+              id="tarefa-projeto"
+              v-model="targetProject"
+              :options="projectOptions"
+            />
           </div>
           <div v-if="targetProject" class="form-group">
             <label class="check-row">

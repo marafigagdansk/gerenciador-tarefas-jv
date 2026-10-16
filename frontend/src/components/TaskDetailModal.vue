@@ -4,6 +4,8 @@ import { useTaskStore } from '../stores/task'
 import { useCompanyStore } from '../stores/company'
 import { STATUS_LABELS, PRIORITY_LABELS, formatDate } from '../api'
 import { Calendar, CalendarOff, X, CheckCircle, UserPlus, Check, Plus, Trash2 } from 'lucide-vue-next'
+import CustomDatePicker from './CustomDatePicker.vue'
+import CustomSelect from './CustomSelect.vue'
 
 const props = defineProps({
   task: { type: Object, required: true },
@@ -52,6 +54,25 @@ const dirty = computed(() =>
   (edit.value.dueDate || null) !== (props.task.due_date || null)
 )
 
+const statusOptions = computed(() =>
+  Object.keys(STATUS_LABELS).map((k) => ({
+    value: k,
+    label: STATUS_LABELS[k],
+  }))
+)
+
+const priorityOptions = computed(() =>
+  Object.keys(PRIORITY_LABELS).map((k) => ({
+    value: k,
+    label: PRIORITY_LABELS[k],
+  }))
+)
+
+const projectOptions = computed(() => [
+  { value: '', label: 'Tarefa Geral (sem projeto)' },
+  ...openProjects.value.map((p) => ({ value: p.id, label: p.name })),
+])
+
 async function run(fn) {
   erro.value = ''
   salvando.value = true
@@ -70,13 +91,17 @@ const salvarCampos = () => run(() => store.updateTask(props.task.id, {
   priority: edit.value.priority,
   due_date: edit.value.dueDate || null,
 }, props.scopeProjectId))
-const mudarStatus = (e) => run(() => store.updateTask(props.task.id, { status: e.target.value }, props.scopeProjectId))
+const mudarStatus = (newStatusOrEvent) => {
+  const status = typeof newStatusOrEvent === 'string' ? newStatusOrEvent : newStatusOrEvent?.target?.value
+  return run(() => store.updateTask(props.task.id, { status }, props.scopeProjectId))
+}
 const concluir = () => run(() => store.updateTask(props.task.id, { status: 'done' }, props.scopeProjectId))
 const pegar = () => run(() => store.claimTask(props.task.id, props.scopeProjectId))
 const largar = () => run(() => store.unclaimTask(props.task.id, props.scopeProjectId))
-const moverProjeto = (e) => {
-  const v = e.target.value
-  return run(() => store.updateTask(props.task.id, { project_id: v === '' ? null : Number(v) }, props.scopeProjectId))
+const moverProjeto = (newValOrEvent) => {
+  const raw = typeof newValOrEvent === 'object' && newValOrEvent?.target ? newValOrEvent.target.value : newValOrEvent
+  const project_id = raw === '' || raw === null ? null : Number(raw)
+  return run(() => store.updateTask(props.task.id, { project_id }, props.scopeProjectId))
 }
 const alternarResp = (mid, checked) => {
   const ids = checked ? [...assigneeIds.value, mid] : assigneeIds.value.filter((i) => i !== mid)
@@ -128,23 +153,20 @@ const toggleSub = (s, e) => run(() => store.toggleSubtask(props.task.id, s.id, e
             </div>
             <div class="form-group">
               <label for="det-prioridade">Prioridade</label>
-              <select id="det-prioridade" v-model="edit.priority">
-                <option v-for="(label, key) in PRIORITY_LABELS" :key="key" :value="key">{{ label }}</option>
-              </select>
+              <CustomSelect
+                id="det-prioridade"
+                v-model="edit.priority"
+                :options="priorityOptions"
+                type="priority"
+              />
             </div>
             <div class="form-group">
-              <div class="label-with-action">
-                <label for="det-data-conclusao">Data de Conclusão (opcional)</label>
-                <button
-                  v-if="edit.dueDate"
-                  type="button"
-                  class="btn-text-action"
-                  @click="edit.dueDate = ''"
-                >
-                  Limpar (indefinida)
-                </button>
-              </div>
-              <input id="det-data-conclusao" v-model="edit.dueDate" type="date" />
+              <label for="det-data-conclusao">Data de Conclusão (opcional)</label>
+              <CustomDatePicker
+                id="det-data-conclusao"
+                v-model="edit.dueDate"
+                placeholder="Definir data de conclusão"
+              />
               <span class="hint">Deixe em branco para data de conclusão indefinida.</span>
             </div>
             <div>
@@ -172,17 +194,26 @@ const toggleSub = (s, e) => run(() => store.toggleSubtask(props.task.id, s.id, e
           <div class="grid-2">
             <div class="form-group">
               <label for="det-status">Status</label>
-              <select id="det-status" :value="task.status" :disabled="!canChangeStatus || salvando" @change="mudarStatus">
-                <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
-              </select>
+              <CustomSelect
+                id="det-status"
+                :model-value="task.status"
+                :options="statusOptions"
+                :disabled="!canChangeStatus || salvando"
+                type="status"
+                @change="mudarStatus"
+              />
               <p v-if="!canChangeStatus" class="hint">Pegue a tarefa para alterar o status.</p>
             </div>
             <div class="form-group">
               <label for="det-projeto">Projeto</label>
-              <select v-if="isMaster" id="det-projeto" :value="task.project_id ?? ''" :disabled="salvando" @change="moverProjeto">
-                <option value="">Tarefa Geral (sem projeto)</option>
-                <option v-for="p in openProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
-              </select>
+              <CustomSelect
+                v-if="isMaster"
+                id="det-projeto"
+                :model-value="task.project_id ?? ''"
+                :options="projectOptions"
+                :disabled="salvando"
+                @change="moverProjeto"
+              />
               <span v-else class="badge badge-muted fit">{{ task.project_name || 'Tarefa Geral' }}</span>
             </div>
           </div>

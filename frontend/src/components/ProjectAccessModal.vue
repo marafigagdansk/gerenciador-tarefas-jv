@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useCompanyStore } from '../stores/company'
-import { X } from 'lucide-vue-next'
+import { getInitials } from '../api'
+import { X, ShieldCheck } from 'lucide-vue-next'
 
 const props = defineProps({ isOpen: Boolean, projectId: { type: Number, default: null } })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'saved'])
 
 const company = useCompanyStore()
 const colabAccess = ref({})
@@ -15,10 +16,39 @@ const collaborators = computed(() =>
   company.members.filter((m) => m.role === 'collaborator' && m.is_active)
 )
 
+const AVATAR_PALETTES = [
+  { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  { bg: '#F0FDFA', text: '#0F766E', border: '#99F6E4' },
+  { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
+  { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
+  { bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
+  { bg: '#FDF2F8', text: '#BE185D', border: '#FBCFE8' },
+  { bg: '#F8FAFC', text: '#334155', border: '#CBD5E1' },
+]
+
+function avatarColorStyle(name) {
+  let hash = 0
+  const str = String(name || '')
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  const item = AVATAR_PALETTES[Math.abs(hash) % AVATAR_PALETTES.length]
+  return {
+    backgroundColor: item.bg,
+    color: item.text,
+    borderColor: item.border,
+  }
+}
+
+
 watch(() => props.isOpen, async (open) => {
   if (!open) return
   erro.value = ''
   try {
+    if (!company.members || company.members.length === 0) {
+      await company.fetchMembers()
+    }
     const data = await company.getVisibility(props.projectId)
     const items = data.items || []
     colabAccess.value = {}
@@ -78,6 +108,7 @@ async function salvar() {
 
     await company.setVisibility(props.projectId, items)
     await company.fetchProjects()
+    emit('saved')
     emit('close')
   } catch (err) {
     erro.value = err.message
@@ -98,10 +129,10 @@ async function salvar() {
       </div>
       <form @submit.prevent="salvar" class="modal-body">
         <div v-if="erro" class="alert-error">{{ erro }}</div>
-        <p class="hint" style="margin-bottom: 0.5rem">
-          Colaboradores marcados enxergam este projeto e suas tarefas. Marque 'Cria Tarefas' para permitir que criem tarefas internas no projeto.
+        <p class="hint" style="margin-bottom: 0.75rem">
+          Colaboradores marcados enxergam este projeto e suas tarefas. Marque <strong>Cria Tarefas</strong> para permitir que criem tarefas no projeto.
         </p>
-        <div class="check-list" style="max-height: 220px">
+        <div class="check-list" style="max-height: 280px">
           <div v-for="m in collaborators" :key="m.id" class="collaborator-access-item">
             <label class="check-row access-toggle">
               <input
@@ -109,6 +140,9 @@ async function salvar() {
                 :checked="isSelected(m.id)"
                 @change="toggleAccess(m.id, $event.target.checked)"
               />
+              <span class="member-avatar-mini" :style="avatarColorStyle(m.name)">
+                {{ getInitials(m.name) }}
+              </span>
               <span class="member-name">{{ m.name }}</span>
             </label>
             <label
@@ -154,6 +188,23 @@ async function salvar() {
 .access-toggle {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.member-avatar-mini {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .member-name {

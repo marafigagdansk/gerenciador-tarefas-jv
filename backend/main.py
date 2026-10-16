@@ -615,7 +615,21 @@ def get_project(company_id: int, project_id: int, m=Depends(member_ctx), db=Depe
         raise HTTPException(status_code=403, detail="Você não tem acesso a este projeto.")
     data = {k: p[k] for k in ("id", "name", "description", "status", "due_date")}
     data["can_create_tasks"] = can_create_task_in_project(db, m, project_id)
+    colabs = db.execute(
+        """SELECT m.id, u.name, v.can_create_tasks
+           FROM project_visibilities v
+           JOIN company_memberships m ON m.id = v.membership_id
+           JOIN users u ON u.id = m.user_id
+           WHERE v.project_id = ? AND m.is_active = 1
+           ORDER BY u.name""",
+        (project_id,)
+    ).fetchall()
+    data["collaborators"] = [
+        {"id": r["id"], "name": r["name"], "can_create_tasks": bool(r["can_create_tasks"])}
+        for r in colabs
+    ]
     return data
+
 
 
 @app.patch("/api/companies/{company_id}/projects/{project_id}")
